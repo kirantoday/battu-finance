@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #0A0E1A;
+  color: #E8E8E8;
+}
+
+/* Amber blinking cursor for command bar */
+input.caret-battu-warning {
+  caret-color: #F59E0B;
+}
+
+/* Green/red price flash animation */
+@keyframes flash-green {
+  0%   { background-color: rgba(16, 185, 129, 0.3); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-red {
+  0%   { background-color: rgba(239, 68, 68, 0.3); }
+  100% { background-color: transparent; }
+}
+.flash-up   { animation: flash-green 0.6s ease-out; }
+.flash-down { animation: flash-red   0.6s ease-out; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0A0E1A; }
+::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 2px; }

@@ -1,0 +1,21 @@
+{
+  "name": "battu-finance",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:api": "pnpm --filter @battu/api dev",
+    "dev:web": "pnpm --filter @battu/web dev",
+    "build": "pnpm --recursive build",
+    "typecheck": "pnpm --recursive typecheck",
+    "validate": "pnpm --filter @battu/validation run validate",
+    "validate:report": "pnpm --filter @battu/validation run report",
+    "seed:groundtruth": "pnpm --filter @battu/validation run seed",
+    "db:generate": "pnpm --filter @battu/db db:generate",
+    "db:migrate": "pnpm --filter @battu/db db:migrate",
+    "db:studio": "pnpm --filter @battu/db db:studio"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}
