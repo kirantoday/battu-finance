@@ -486,19 +486,39 @@ Price state in Zustand. Green/red flash via CSS animation on tick.
 Never call EDGAR + Claude on every render. Cache in `battu.liq_cache`.
 Show `Last computed: X days ago · [Refresh]` on screen.
 
-### 6. Dark Terminal Theme — Immutable
+### 6. Theme System
+
+Three themes available. Default: `amber`. User preference saved to localStorage key `battu-theme`.
+
+Themes: `amber` (Amber Terminal) | `ice` (Ice Blue) | `phosphor` (Green Phosphor)
+
+ALL colors must use CSS variables — never hardcode hex values in components:
+
 ```
-Background:   #0A0E1A
-Surface:      #111827
-Primary text: #E8E8E8
-Muted:        #6B7280
-Accent blue:  #2E86DE
-Positive:     #10B981
-Negative:     #EF4444
-Warning:      #F59E0B
-Command bar:  font-mono, cursor #F59E0B blinking
+var(--battu-bg)           page background
+var(--battu-surface)      card/panel background
+var(--battu-border)       borders and dividers
+var(--battu-text)         primary text
+var(--battu-muted)        secondary/label text
+var(--battu-accent)       brand accent (amber/blue/green)
+var(--battu-positive)     gains, positive values
+var(--battu-negative)     losses, negative values
+var(--battu-warning)      warnings, alerts
+var(--battu-cursor)       command bar cursor
+var(--battu-header-bg)    top bar background
+var(--battu-cmd-bg)       command bar background
+var(--battu-screen-bg)    main content area
+var(--battu-ticker-bg)    live ticker bar
+var(--battu-label-color)  field labels
+var(--battu-value-color)  field values
+var(--battu-title-color)  screen titles (DES, GP, etc.)
+var(--battu-glow)         phosphor glow (none for amber/ice)
 ```
-No light mode. No theme toggle.
+
+Theme switching: `applyThemeToDom()` in `apps/web/src/store/terminal.ts`
+Theme shortcut: `Ctrl+T` opens full preview modal
+Theme buttons: `AMB | ICE | PHO` in top-right header
+No light mode.
 
 ---
 

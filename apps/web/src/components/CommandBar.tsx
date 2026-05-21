@@ -46,19 +46,41 @@ export function CommandBar() {
       setCommandInput('')
       inputRef.current?.blur()
     }
+    // Ctrl+T = theme modal (handled at App.tsx via window keydown — no-op here)
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-battu-surface border-b border-battu-border">
+    <div
+      className="flex items-center gap-3 px-4 py-2"
+      style={{
+        background: 'var(--battu-cmd-bg)',
+        borderBottom: '1px solid var(--battu-border)',
+      }}
+    >
       {/* Active ticker indicator */}
       {activeTicker && (
-        <span className="text-battu-accent font-mono text-sm font-bold min-w-[60px]">
+        <span
+          className="font-bold min-w-[60px]"
+          style={{
+            color: 'var(--battu-accent)',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '13px',
+          }}
+        >
           {activeTicker}
         </span>
       )}
 
       {/* Command prompt */}
-      <span className="text-battu-warning font-mono text-sm">›</span>
+      <span
+        style={{
+          color: 'var(--battu-accent)',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '13px',
+        }}
+      >
+        ›
+      </span>
 
       {/* Input */}
       <input
@@ -67,14 +89,29 @@ export function CommandBar() {
         onChange={(e) => setCommandInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Type a command — DES AAPL · GP · FA · LIQ · /ask · Ctrl+K for all commands"
-        className="flex-1 bg-transparent font-mono text-sm text-battu-text
-                   placeholder:text-battu-muted outline-none caret-battu-warning"
+        style={{
+          background: 'transparent',
+          color: 'var(--battu-text)',
+          caretColor: 'var(--battu-cursor)',
+          outline: 'none',
+          flex: 1,
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '13px',
+          border: 'none',
+        }}
         autoComplete="off"
         spellCheck={false}
       />
 
       {/* Hint */}
-      <span className="text-battu-muted text-xs font-mono hidden md:block">
+      <span
+        className="hidden md:block"
+        style={{
+          color: 'var(--battu-muted)',
+          fontSize: '10px',
+          fontFamily: 'JetBrains Mono, monospace',
+        }}
+      >
         Ctrl+K
       </span>
     </div>

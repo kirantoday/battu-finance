@@ -1,5 +1,20 @@
 import { create } from 'zustand'
-import type { ParsedCommand, ScreenCommand } from '@battu/shared'
+import type { ParsedCommand, ScreenCommand, ThemeName } from '@battu/shared'
+import { THEMES, DEFAULT_THEME } from '@battu/shared'
+
+function applyThemeToDom(themeName: ThemeName) {
+  const tokens = THEMES[themeName].tokens
+  const root = document.documentElement
+  Object.entries(tokens).forEach(([key, value]) => {
+    // Convert camelCase to kebab-case for CSS variables
+    const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase()
+    root.style.setProperty(`--battu-${cssKey}`, value)
+  })
+}
+
+// Apply saved theme immediately on module load
+const savedTheme = (localStorage.getItem('battu-theme') as ThemeName) || DEFAULT_THEME
+applyThemeToDom(savedTheme)
 
 interface TerminalStore {
   // Active ticker — persists across screen changes
@@ -22,6 +37,10 @@ interface TerminalStore {
   // Command palette
   paletteOpen: boolean
   setPaletteOpen: (open: boolean) => void
+
+  // Theme
+  theme: ThemeName
+  setTheme: (theme: ThemeName) => void
 
   // Live prices from WebSocket
   prices: Record<string, {
@@ -72,6 +91,13 @@ export const useTerminal = create<TerminalStore>((set, get) => ({
 
   paletteOpen: false,
   setPaletteOpen: (open) => set({ paletteOpen: open }),
+
+  theme: savedTheme,
+  setTheme: (theme) => {
+    localStorage.setItem('battu-theme', theme)
+    applyThemeToDom(theme)
+    set({ theme })
+  },
 
   prices: {},
   updatePrice: (ticker, price, prev) => set((s) => ({
