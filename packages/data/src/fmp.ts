@@ -87,7 +87,8 @@ export interface FMPIncomeStatement {
   netIncome: number
   netIncomeRatio: number
   eps: number
-  epsdiluted: number
+  epsdiluted: number     // v3 spelling
+  epsDiluted?: number    // stable spelling (camelCase)
   weightedAverageShsOut: number
   weightedAverageShsOutDil: number
   link: string
@@ -180,7 +181,10 @@ export interface FMPCashFlow {
   debtRepayment: number
   commonStockIssued: number
   commonStockRepurchased: number
-  dividendsPaid: number
+  dividendsPaid: number             // v3 — sum of all dividend types
+  commonDividendsPaid?: number      // stable — common stock dividends (typically negative)
+  netDividendsPaid?: number         // stable — common + preferred
+  preferredDividendsPaid?: number   // stable — preferred only
   otherFinancingActivites: number
   netCashUsedProvidedByFinancingActivities: number
   effectOfForexChangesOnCash: number

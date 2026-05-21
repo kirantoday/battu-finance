@@ -1,7 +1,9 @@
 import { Hono } from 'hono'
 import { fmpClient, marketProvider } from '@battu/data'
-import type { FMPEstimates } from '@battu/data'
-import type { DESProfile } from '@battu/shared'
+import type {
+  FMPEstimates, FMPIncomeStatement, FMPBalanceSheet, FMPCashFlow,
+} from '@battu/data'
+import type { DESProfile, FAData, FAStatement } from '@battu/shared'
 import { NOT_IMPLEMENTED } from './_notImplemented'
 
 /**
@@ -23,6 +25,75 @@ function pickNextEarningsDate(estimates: FMPEstimates[] | null | undefined): str
   if (candidates.length === 0) return null
   candidates.sort((a, b) => a.t - b.t)
   return candidates[0].date
+}
+
+/**
+ * Combine one period's IS, BS, and CF rows from FMP into the FAStatement
+ * the frontend consumes. Each statement comes from a separate FMP endpoint,
+ * so we index by array position (FMP returns them in descending date order).
+ */
+function buildFAStatement(
+  inc: FMPIncomeStatement | undefined,
+  bal: FMPBalanceSheet    | undefined,
+  cf:  FMPCashFlow        | undefined,
+  period: 'annual' | 'quarter',
+): FAStatement | null {
+  if (!inc) return null
+
+  const rev = inc.revenue         ?? null
+  const gp  = inc.grossProfit     ?? null
+  const oi  = inc.operatingIncome ?? null
+  const ni  = inc.netIncome       ?? null
+
+  // Stable returns epsDiluted (camelCase); v3 returns epsdiluted (lowercase)
+  const epsDiluted = inc.epsDiluted ?? inc.epsdiluted ?? inc.eps ?? null
+
+  // Stable splits dividends into common/preferred/net — common is what most
+  // analysts mean. v3 returned a single dividendsPaid field as fallback.
+  const dividendsPaid =
+       cf?.commonDividendsPaid
+    ?? cf?.netDividendsPaid
+    ?? cf?.dividendsPaid
+    ?? null
+
+  // freeCashFlow is computed by FMP on stable; derive from OCF + capex when
+  // missing (capex is already negative, so OCF + capex == OCF - |capex|).
+  const ocf   = cf?.operatingCashFlow ?? cf?.netCashProvidedByOperatingActivities ?? null
+  const capex = cf?.capitalExpenditure ?? null
+  const fcf   = cf?.freeCashFlow ?? (ocf != null && capex != null ? ocf + capex : null)
+
+  // Period label:
+  //   annual → year ("2024")
+  //   quarter → "Q{n} YYYY" (FMP reports period as "Q1"|"Q2"|"Q3"|"Q4" + fiscalYear)
+  let label = ''
+  if (period === 'annual') {
+    label = inc.date ? new Date(inc.date).getFullYear().toString() : (inc.calendarYear || '')
+  } else {
+    const yr = inc.calendarYear || (inc.date ? new Date(inc.date).getFullYear().toString() : '')
+    const q  = inc.period && /^Q[1-4]$/.test(inc.period) ? inc.period : ''
+    label = q && yr ? `${q} ${yr}` : (inc.date?.slice(0, 7) ?? '')
+  }
+
+  return {
+    period:             label,
+    date:               inc.date || '',
+    revenue:            rev,
+    grossProfit:        gp,
+    grossMargin:        rev && gp != null ? gp / rev : null,
+    operatingIncome:    oi,
+    operatingMargin:    rev && oi != null ? oi / rev : null,
+    netIncome:          ni,
+    netMargin:          rev && ni != null ? ni / rev : null,
+    epsDiluted,
+    totalAssets:        bal?.totalAssets ?? null,
+    totalDebt:          bal?.totalDebt ?? null,
+    cashAndEquiv:       bal?.cashAndShortTermInvestments ?? bal?.cashAndCashEquivalents ?? null,
+    shareholdersEquity: bal?.totalStockholdersEquity ?? null,
+    operatingCF:        ocf,
+    capex,
+    freeCashFlow:       fcf,
+    dividendsPaid,
+  }
 }
 
 export const fundamentalsRoutes = new Hono()
@@ -181,7 +252,53 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
   })
 })
 
-fundamentalsRoutes.get('/financials/:ticker',   (c) => c.json(NOT_IMPLEMENTED))
+// GET /api/v1/fundamentals/financials/:ticker?period=annual|quarter&limit=5
+// Returns combined IS + BS + CF over the last N periods (default 5).
+fundamentalsRoutes.get('/financials/:ticker', async (c) => {
+  const ticker = c.req.param('ticker').toUpperCase()
+  const rawPeriod = c.req.query('period') === 'quarter' ? 'quarter' : 'annual'
+  const limit = Math.max(1, Math.min(20, parseInt(c.req.query('limit') || '5')))
+
+  const [incomeRes, balanceRes, cashflowRes] = await Promise.allSettled([
+    fmpClient.getIncomeStatement(ticker, rawPeriod, limit),
+    fmpClient.getBalanceSheet(ticker,   rawPeriod, limit),
+    fmpClient.getCashFlow(ticker,       rawPeriod, limit),
+  ])
+
+  const sources: Array<[string, PromiseSettledResult<unknown>]> = [
+    ['fmp.income-statement',        incomeRes],
+    ['fmp.balance-sheet-statement', balanceRes],
+    ['fmp.cash-flow-statement',     cashflowRes],
+  ]
+  for (const [name, res] of sources) {
+    if (res.status === 'rejected') {
+      console.warn(`[financials] ${ticker} ${name} failed: ${(res.reason as Error)?.message ?? res.reason}`)
+    }
+  }
+
+  const income   = incomeRes.status   === 'fulfilled' ? (incomeRes.value   ?? []) : []
+  const balance  = balanceRes.status  === 'fulfilled' ? (balanceRes.value  ?? []) : []
+  const cashflow = cashflowRes.status === 'fulfilled' ? (cashflowRes.value ?? []) : []
+
+  if (income.length === 0) {
+    return c.json({ data: null, error: `No financial data for ${ticker}` }, 404)
+  }
+
+  const statements: FAStatement[] = []
+  for (let i = 0; i < Math.min(income.length, limit); i++) {
+    const stmt = buildFAStatement(income[i], balance[i], cashflow[i], rawPeriod)
+    if (stmt) statements.push(stmt)
+  }
+
+  const data: FAData = {
+    ticker,
+    name:       '',   // DES profile carries the long name
+    currency:   income[0]?.reportedCurrency || 'USD',
+    period:     rawPeriod,
+    statements,
+  }
+  return c.json({ data, error: null })
+})
 fundamentalsRoutes.get('/ratios/:ticker',       (c) => c.json(NOT_IMPLEMENTED))
 fundamentalsRoutes.get('/peers/:ticker',        (c) => c.json(NOT_IMPLEMENTED))
 fundamentalsRoutes.get('/estimates/:ticker',    (c) => c.json(NOT_IMPLEMENTED))

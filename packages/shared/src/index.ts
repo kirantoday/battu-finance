@@ -131,6 +131,40 @@ export interface TickerPrice {
   timestamp: number
 }
 
+// ── FA Financial Analysis (Income/Balance/CashFlow combined) ──────────────────
+
+export interface FAStatement {
+  period:             string         // "2024" or "Q1 2025"
+  date:               string         // ISO date
+  // Income statement
+  revenue:            number | null
+  grossProfit:        number | null
+  grossMargin:        number | null  // decimal — 0.46 = 46%
+  operatingIncome:    number | null
+  operatingMargin:    number | null
+  netIncome:          number | null
+  netMargin:          number | null
+  epsDiluted:         number | null
+  // Balance sheet
+  totalAssets:        number | null
+  totalDebt:          number | null
+  cashAndEquiv:       number | null
+  shareholdersEquity: number | null
+  // Cash flow
+  operatingCF:        number | null
+  capex:              number | null
+  freeCashFlow:       number | null
+  dividendsPaid:      number | null
+}
+
+export interface FAData {
+  ticker:     string
+  name:       string
+  currency:   string
+  period:     'annual' | 'quarter'
+  statements: FAStatement[]   // most recent first, up to 5 periods
+}
+
 // ── DES Profile (Security Description response) ───────────────────────────────
 
 export interface DESProfile {
