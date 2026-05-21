@@ -18,7 +18,7 @@ export default function App() {
   // Ctrl+T opens theme modal; Esc closes it
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 't' && (e.metaKey || e.ctrlKey)) {
+      if (e.key === '\\' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setThemeModalOpen(true)
       }
@@ -70,7 +70,7 @@ export default function App() {
           <ThemeSwitcher />
           <button
             onClick={() => setThemeModalOpen(true)}
-            title="Theme Preview (Ctrl+T)"
+            title="Theme Preview (Ctrl+\)"
             style={{
               background: 'transparent',
               border: 'none',

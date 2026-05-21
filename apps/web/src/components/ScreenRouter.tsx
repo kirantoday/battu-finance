@@ -98,7 +98,7 @@ function WelcomeScreen() {
         <br /><br />
         Press <span style={{ color: 'var(--battu-warning)' }}>Ctrl+K</span> for all commands
         {' · '}
-        <span style={{ color: 'var(--battu-warning)' }}>Ctrl+T</span> to change theme.
+        <span style={{ color: 'var(--battu-warning)' }}>Ctrl+\</span> to change theme.
       </div>
     </div>
   )
