@@ -5,3 +5,9 @@ dist/
 *.env
 drizzle/
 reports/
+
+# Planning docs — kept on disk, not in git
+*.pdf
+BATTU_Session_Validation.md
+BATTU_Session_0A.md
+BBG_Clone_Research_Architecture.pdf
