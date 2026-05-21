@@ -1,5 +1,6 @@
 import { useTerminal } from '@/store/terminal'
 import { DESScreen } from '@/screens/DES'
+import { GPScreen }  from '@/screens/GP'
 
 export function ScreenRouter() {
   const currentScreen = useTerminal((s) => s.currentScreen)
@@ -11,6 +12,8 @@ export function ScreenRouter() {
 
   // Real screens
   if (currentScreen === 'DES') return <DESScreen />
+  // GIP (intraday graph) reuses GP — the user picks 1D from the controls.
+  if (currentScreen === 'GP' || currentScreen === 'GIP') return <GPScreen />
 
   // Stub fallback for screens not yet implemented
   return (
