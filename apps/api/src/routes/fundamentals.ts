@@ -1,7 +1,29 @@
 import { Hono } from 'hono'
 import { fmpClient, marketProvider } from '@battu/data'
+import type { FMPEstimates } from '@battu/data'
 import type { DESProfile } from '@battu/shared'
 import { NOT_IMPLEMENTED } from './_notImplemented'
+
+/**
+ * From an array of analyst-estimate entries, pick the earliest date that is
+ * strictly in the future AND within the next 12 months. Returns null when no
+ * entry qualifies — the UI displays that as "—".
+ */
+function pickNextEarningsDate(estimates: FMPEstimates[] | null | undefined): string | null {
+  if (!estimates || estimates.length === 0) return null
+  const now = Date.now()
+  const horizon = now + 365 * 24 * 60 * 60 * 1000 // ≈ 12 months
+  const candidates: Array<{ date: string; t: number }> = []
+  for (const e of estimates) {
+    if (!e?.date) continue
+    const t = new Date(e.date).getTime()
+    if (Number.isNaN(t)) continue
+    if (t > now && t <= horizon) candidates.push({ date: e.date, t })
+  }
+  if (candidates.length === 0) return null
+  candidates.sort((a, b) => a.t - b.t)
+  return candidates[0].date
+}
 
 export const fundamentalsRoutes = new Hono()
 
@@ -17,7 +39,12 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
     fmpClient.getProfile(ticker),
     fmpClient.getRatiosTTM(ticker),
     fmpClient.getKeyMetricsTTM(ticker),
-    fmpClient.getAnalystEstimates(ticker),
+    // FMP's free/standard plans only allow period=annual; period=quarter is
+    // Premium-only and returns "Premium Query Parameter" errors. Use annual
+    // with limit=10 so we can pick the nearest future fiscal-year-end within
+    // the 12-month window. For mega-cap companies this still lands within
+    // 4–12 months and is a reasonable proxy for the next earnings call.
+    fmpClient.getAnalystEstimates(ticker, { period: 'annual', limit: 10 }),
     marketProvider.getQuote(ticker),
   ])
 
@@ -132,7 +159,7 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
     website:       profile?.website  || '',
     description:   profile?.description || '',
 
-    nextEarningsDate: earnings?.date || null,
+    nextEarningsDate: pickNextEarningsDate(earnings),
 
     secFilingsUrl: profile?.cik
       ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${profile.cik}`

@@ -86,7 +86,15 @@ export function CommandBar() {
       <input
         ref={inputRef}
         value={commandInput}
-        onChange={(e) => setCommandInput(e.target.value)}
+        onChange={(e) => {
+          const val = e.target.value
+          // Don't uppercase /ask queries — user types naturally
+          if (val.startsWith('/')) {
+            setCommandInput(val)
+          } else {
+            setCommandInput(val.toUpperCase())
+          }
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Type a command — DES AAPL · GP · FA · LIQ · /ask · Ctrl+K for all commands"
         style={{

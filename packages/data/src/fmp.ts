@@ -502,12 +502,18 @@ export class FMPClient {
     return res?.[0]?.peersList ?? []
   }
 
-  async getAnalystEstimates(ticker: string): Promise<FMPEstimates> {
-    // Stable requires `period` (annual|quarter). limit=1 → next year only.
+  async getAnalystEstimates(
+    ticker: string,
+    opts?: { period?: 'annual' | 'quarter'; limit?: number },
+  ): Promise<FMPEstimates[]> {
+    // Stable requires `period`. Returns the full array so callers can pick a
+    // specific entry (e.g. the nearest future fiscal year-end).
     const res = await this.get<FMPEstimates[]>(`/analyst-estimates`, {
-      symbol: ticker.toUpperCase(), period: 'annual', limit: 1,
+      symbol: ticker.toUpperCase(),
+      period: opts?.period ?? 'annual',
+      limit:  opts?.limit  ?? 1,
     })
-    return res?.[0]
+    return res ?? []
   }
 
   async getGrades(ticker: string): Promise<FMPGrade[]> {
