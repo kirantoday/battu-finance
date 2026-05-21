@@ -6,7 +6,20 @@ interface Props {
   timeframe: string
 }
 
+/** Bloomberg-style timeframe label — makes the interval explicit to the user. */
+const TIMEFRAME_LABELS: Record<string, string> = {
+  '1D':  'INTRADAY (5min)',
+  '1W':  '5 DAY (30min)',
+  '1M':  '1 MONTH (daily)',
+  '3M':  '3 MONTH (daily)',
+  '6M':  '6 MONTH (daily)',
+  '1Y':  '1 YEAR (daily)',
+  '5Y':  '5 YEAR (weekly)',
+  '10Y': '10 YEAR (monthly)',
+}
+
 export function GPHeader({ ticker, quote, timeframe }: Props) {
+  const tfLabel = TIMEFRAME_LABELS[timeframe] ?? timeframe
   const pos         = (quote?.changePct ?? 0) >= 0
   const arrow       = pos ? '▲' : '▼'
   const changeColor = pos ? 'var(--battu-positive)' : 'var(--battu-negative)'
@@ -28,7 +41,7 @@ export function GPHeader({ ticker, quote, timeframe }: Props) {
           {(quote?.name || ticker).toUpperCase()}
         </span>
         <span style={{ color: 'var(--battu-muted)', fontSize: '10px' }}>
-          {ticker} · {timeframe}
+          {ticker} · {tfLabel}
         </span>
       </div>
 

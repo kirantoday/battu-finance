@@ -153,13 +153,14 @@ export function GPChart({ bars, chartType, ticker, onBarHover }: Props) {
     }
     void mainSeries
 
-    // Volume series — pinned to bottom 20% via its own price scale
+    // Volume series — pinned to bottom 25% via its own price scale
     const volumeSeries = chart.addHistogramSeries({
-      priceFormat:  { type: 'volume' },
+      base:         0,
+      priceFormat:  { type: 'volume', precision: 0 },
       priceScaleId: 'volume',
     })
     chart.priceScale('volume').applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
+      scaleMargins: { top: 0.75, bottom: 0.02 },
     })
     volumeSeries.setData(toVolumeBars(bars, colors))
 
