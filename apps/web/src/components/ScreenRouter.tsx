@@ -2,6 +2,7 @@ import { useTerminal } from '@/store/terminal'
 import { DESScreen } from '@/screens/DES'
 import { GPScreen }  from '@/screens/GP'
 import { FAScreen }  from '@/screens/FA'
+import { NIScreen }  from '@/screens/NI'
 
 export function ScreenRouter() {
   const currentScreen = useTerminal((s) => s.currentScreen)
@@ -16,6 +17,14 @@ export function ScreenRouter() {
   // GIP (intraday graph) reuses GP — the user picks 1D from the controls.
   if (currentScreen === 'GP' || currentScreen === 'GIP') return <GPScreen />
   if (currentScreen === 'FA') return <FAScreen />
+  // NI = ticker news, CN = company news (alias), N/TOP = market-wide headlines.
+  // The NIScreen reads currentScreen itself to switch between modes.
+  if (
+    currentScreen === 'NI'  ||
+    currentScreen === 'CN'  ||
+    currentScreen === 'N'   ||
+    currentScreen === 'TOP'
+  ) return <NIScreen />
 
   // Stub fallback for screens not yet implemented
   return (

@@ -42,10 +42,14 @@ function hashUrl(url: string): string {
 
 function detectCategory(headline: string): NewsArticle['category'] {
   const h = headline.toLowerCase()
-  if (/\b(eps|earnings|revenue|beat|miss|guidance)\b/.test(h)) return 'earnings'
-  if (/\b(upgrade|downgrade|price target|initiated|outperform)\b/.test(h)) return 'analyst'
-  if (/\b(merger|acquisition|takeover|deal|buyout)\b/.test(h)) return 'ma'
-  if (/\b(fed|cpi|gdp|inflation|payrolls|rate)\b/.test(h)) return 'macro'
+  // earnings cues — quarterly reports, prints, surprises, guidance
+  if (/\b(eps|earnings|revenue|beat|miss|guidance|q[1-4]|quarterly)\b/.test(h)) return 'earnings'
+  // analyst cues — rating changes, target moves, coverage initiations
+  if (/\b(upgrade|downgrade|price target|initiated|outperform|overweight|underweight|reiterates?)\b/.test(h)) return 'analyst'
+  // M&A cues — deals, takeovers, acquisitions
+  if (/\b(merger|acquisition|takeover|deal|buyout|acquired|acquires|to acquire)\b/.test(h)) return 'ma'
+  // macro cues — central banks, inflation prints, jobs reports
+  if (/\b(fed|federal reserve|cpi|gdp|inflation|payrolls|interest rate|rate hike|rate cut)\b/.test(h)) return 'macro'
   return 'general'
 }
 
