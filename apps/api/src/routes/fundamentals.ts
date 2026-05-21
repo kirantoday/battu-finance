@@ -96,8 +96,9 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
   const des: DESProfile = {
     ticker,
     name:          profile?.companyName || quote?.name || ticker,
-    // Stable returns short name in `exchange` and the long name in `exchangeFullName`.
-    exchange:      profile?.exchange || profile?.exchangeShortName || quote?.exchange || '',
+    // Prefer the long exchange label ("NASDAQ Global Select") over the short
+    // code ("NASDAQ"); fall back to v3 / market-provider names if absent.
+    exchange:      profile?.exchangeFullName || profile?.exchange || profile?.exchangeShortName || quote?.exchange || '',
     currency:      profile?.currency || quote?.currency || 'USD',
     country:       profile?.country || 'US',
     isin:          profile?.isin || undefined,
