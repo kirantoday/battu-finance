@@ -135,15 +135,16 @@ export function FATable({ data }: Props) {
                   <td
                     colSpan={periodCols + 2}
                     style={{
-                      padding:      '10px 16px 4px',
-                      color:        'var(--battu-accent)',
-                      fontSize:     '9px',
+                      padding:       '10px 16px 4px 12px',
+                      color:         'var(--battu-accent)',
+                      fontSize:      '9px',
                       letterSpacing: '2px',
-                      fontWeight:   'bold',
-                      background:   'var(--battu-header-bg)',
-                      borderTop:    ri > 0 ? '1px solid var(--battu-border)' : 'none',
-                      position:     'sticky',
-                      left:         0,
+                      fontWeight:    'bold',
+                      background:    'var(--battu-header-bg)',
+                      borderTop:     ri > 0 ? '1px solid var(--battu-border)' : 'none',
+                      borderLeft:    '3px solid var(--battu-accent)',
+                      position:      'sticky',
+                      left:          0,
                     }}
                   >
                     {row.label}
@@ -160,7 +161,8 @@ export function FATable({ data }: Props) {
                 <td style={{
                   padding:      '5px 16px',
                   paddingLeft:  row.indent ? '28px' : '16px',
-                  color:        row.isMargin ? 'var(--battu-muted)' : 'var(--battu-label-color)',
+                  color:        row.isMargin ? 'var(--battu-muted)' : 'var(--battu-text)',
+                  fontStyle:    row.isMargin ? 'italic' : 'normal',
                   fontSize:     '10px',
                   position:     'sticky',
                   left:         0,
@@ -185,6 +187,7 @@ export function FATable({ data }: Props) {
                           : 'var(--battu-value-color)',
                       fontSize:   '10px',
                       fontWeight: si === 0 ? 'bold' : 'normal',
+                      borderLeft: si === 0 ? '1px solid var(--battu-border)' : undefined,
                     }}>
                       {row.format(val)}
                     </td>
