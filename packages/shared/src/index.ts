@@ -131,6 +131,80 @@ export interface TickerPrice {
   timestamp: number
 }
 
+// ── Market Data ───────────────────────────────────────────────────────────────
+
+export interface OHLCVBar {
+  timestamp: number   // Unix timestamp in milliseconds
+  open:      number
+  high:      number
+  low:       number
+  close:     number
+  volume:    number
+  vwap?:     number   // not always available
+}
+
+export interface MarketQuote {
+  ticker:           string
+  price:            number
+  open:             number
+  high:             number
+  low:              number
+  prevClose:        number
+  change:           number    // price - prevClose
+  changePct:        number    // ((price - prevClose) / prevClose) * 100
+  volume:           number
+  avgVolume?:       number
+  marketCap?:       number
+  week52High:       number
+  week52Low:        number
+  bid?:             number
+  ask?:             number
+  vwap?:            number
+  preMarketPrice?:  number
+  postMarketPrice?: number
+  timestamp:        number    // Unix ms
+  currency:         string
+  exchange:         string
+  name:             string    // company long name
+}
+
+export interface MarketProvider {
+  /** Current quote — DES, QR, WL screens */
+  getQuote(ticker: string): Promise<MarketQuote | null>
+
+  /** Multiple quotes at once — WL watchlist */
+  getQuotes(tickers: string[]): Promise<MarketQuote[]>
+
+  /**
+   * Historical OHLCV bars — GP, HP screens.
+   * range:    '1d'|'5d'|'1mo'|'3mo'|'6mo'|'1y'|'2y'|'5y'|'10y'|'ytd'|'max'
+   * interval: '1m'|'5m'|'15m'|'30m'|'1h'|'1d'|'1wk'|'1mo'
+   */
+  getBars(ticker: string, opts: {
+    range:    string
+    interval: string
+  }): Promise<OHLCVBar[]>
+
+  /** Market movers — MOV, MOST screens */
+  getMovers(direction: 'gainers' | 'losers' | 'active'): Promise<MarketQuote[]>
+
+  readonly providerName: 'yahoo' | 'massive'
+}
+
+export type MarketProviderName = 'yahoo' | 'massive'
+
+/** UI timeframe label → Yahoo-style range+interval. */
+export const TIMEFRAME_MAP: Record<string, { range: string; interval: string }> = {
+  '1D':  { range: '1d',   interval: '5m'  },
+  '1W':  { range: '5d',   interval: '30m' },
+  '1M':  { range: '1mo',  interval: '1d'  },
+  '3M':  { range: '3mo',  interval: '1d'  },
+  '6M':  { range: '6mo',  interval: '1d'  },
+  '1Y':  { range: '1y',   interval: '1d'  },
+  '5Y':  { range: '5y',   interval: '1wk' },
+  '10Y': { range: '10y',  interval: '1mo' },
+}
+
 // ── News Provider ─────────────────────────────────────────────────────────────
 
 export interface NewsArticle {

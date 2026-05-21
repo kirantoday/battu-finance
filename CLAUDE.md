@@ -476,6 +476,53 @@ typically faster than the wires. Category mapped from Benzinga's `channels` fiel
 4. Restart API server
 5. Done — no code changes
 
+### Market Data Provider — packages/data/src/marketFactory.ts
+Pluggable market data — switch by changing ONE env var:
+```
+MARKET_PROVIDER=yahoo    ← development (free, no key needed)
+MARKET_PROVIDER=massive  ← production (paid, $29/mo, massive.com)
+```
+
+### Yahoo Finance — packages/data/src/yahoo.ts (dev provider)
+```
+Base:        https://query1.finance.yahoo.com
+Quote+bars:  /v8/finance/chart/{ticker}?interval={interval}&range={range}
+Movers:      /v1/finance/screener/predefined/saved?scrIds={screen}&count=20
+Auth:        none — User-Agent header REQUIRED on every request
+```
+Free, no key, real-time prices (slight delay). Yahoo 401s without a browser-like
+User-Agent — keep that header in place for every fetch.
+
+### Massive/Polygon — packages/data/src/massive.ts (prod provider)
+```
+Base:    https://api.polygon.io (api.massive.com also works)
+Quote:   /v2/snapshot/locale/us/markets/stocks/tickers/{ticker}
+Bars:    /v2/aggs/ticker/{ticker}/range/{mult}/{span}/{from}/{to}
+Movers:  /v2/snapshot/locale/us/markets/stocks/{gainers|losers}
+Auth:    Authorization: Bearer {POLYGON_API_KEY}
+```
+Paid — $29/mo Starter plan required for the snapshot endpoint. Polygon has no
+true "most active" endpoint; the implementation falls back to gainers when
+`direction='active'` is requested.
+
+### Timeframe mapping (TIMEFRAME_MAP in @battu/shared)
+```
+1D  → range=1d,   interval=5m
+1W  → range=5d,   interval=30m
+1M  → range=1mo,  interval=1d
+3M  → range=3mo,  interval=1d
+6M  → range=6mo,  interval=1d
+1Y  → range=1y,   interval=1d
+5Y  → range=5y,   interval=1wk
+10Y → range=10y,  interval=1mo
+```
+
+### To switch to Massive when ready
+1. Sign up at massive.com, get Starter plan ($29/mo)
+2. In `.env.local` set: `MARKET_PROVIDER=massive`
+3. `POLYGON_API_KEY` is already set — no extra key needed
+4. Restart API server — done, no code changes
+
 ### EDGAR — packages/edgar/
 ```
 Submissions: https://data.sec.gov/submissions/CIK{cik10}.json
