@@ -10,12 +10,21 @@ export const marketRoutes = new Hono()
 // GET /api/v1/market/quotes?tickers=AAPL,MSFT,NVDA — batch quotes (WL)
 marketRoutes.get('/quotes', async (c) => {
   const tickersParam = c.req.query('tickers') || ''
-  if (!tickersParam) {
-    return c.json({ data: [], error: 'tickers query param required', provider: marketProvider.providerName })
+  if (!tickersParam.trim()) {
+    return c.json({ data: [], error: 'tickers query param required', provider: marketProvider.providerName, count: 0 })
   }
-  const tickers = tickersParam.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
+  const tickers = tickersParam
+    .split(',')
+    .map(t => t.trim().toUpperCase())
+    .filter(Boolean)
+    .slice(0, 20)  // cap to keep Yahoo sequential fetch reasonable
   const quotes = await marketProvider.getQuotes(tickers)
-  return c.json({ data: quotes, error: null, provider: marketProvider.providerName })
+  return c.json({
+    data:     quotes,
+    error:    null,
+    provider: marketProvider.providerName,
+    count:    quotes.length,
+  })
 })
 
 // GET /api/v1/market/bars/:ticker?timeframe=3M — OHLCV for GP chart
