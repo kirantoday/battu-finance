@@ -105,11 +105,15 @@ export async function computeLIQ(
       if (xbrl) {
         cashB   = xbrl.cashAndEquiv    != null ? xbrl.cashAndEquiv    / 1e9 : cashB
         investB = xbrl.shortTermInvest != null ? xbrl.shortTermInvest / 1e9 : investB
-        if (burnB === null && xbrl.operatingCF != null) {
+        if (burnB === null && xbrl.operatingCF != null && xbrl.operatingCF < 0) {
+          // Only compute burn when OCF is negative (company actually burning cash).
+          // Profitable companies leave burnB / cashRunwayQtrs as null — matching
+          // the FMP path's logic.
           const ocf   = Math.abs(xbrl.operatingCF)
           const capex = Math.abs(xbrl.capex ?? 0)
           burnB = (ocf + capex) / 1e9
         }
+        // If OCF is positive, company is profitable — burn and runway stay null.
       }
     } catch (e) {
       console.warn(`[LIQ ${ticker}] XBRL fallback error: ${(e as Error).message}`)
@@ -269,11 +273,18 @@ interface IntermediateLIQ {
 }
 
 function finalize(ticker: string, d: IntermediateLIQ): LIQData {
-  const missing = d.missing
+  // For profitable companies, quarterly burn is an undefined concept — not a
+  // missing data point. If we have a cash position but no burn, assume the
+  // company is profitable and don't penalize the data-quality rating.
+  const adjustedMissing = d.missing.filter(f => {
+    if (f === 'quarterlyBurn' && d.cashB !== null && d.cashB > 0) return false
+    return true
+  })
+
   const quality: LIQData['dataQuality'] =
-    missing.length === 0 ? 'full' :
-    missing.length <= 2  ? 'partial' :
-                           'minimal'
+    adjustedMissing.length === 0 ? 'full' :
+    adjustedMissing.length <= 2  ? 'partial' :
+                                   'minimal'
 
   return {
     ticker,
@@ -300,6 +311,6 @@ function finalize(ticker: string, d: IntermediateLIQ): LIQData {
     totalLiquidityB:     d.totalLiqB ?? null,
     sources:             d.sources,
     dataQuality:         quality,
-    missingFields:       missing,
+    missingFields:       adjustedMissing,
   }
 }
