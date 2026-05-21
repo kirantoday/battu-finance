@@ -3,7 +3,6 @@ dist/
 .env.local
 .env
 *.env
-drizzle/
 reports/
 
 # Planning docs — kept on disk, not in git

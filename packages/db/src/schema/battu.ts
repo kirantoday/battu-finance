@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   pgSchema, uuid, text, integer, boolean,
   timestamp, jsonb, numeric,
@@ -29,7 +30,7 @@ export const watchlists = battuSchema.table('watchlists', {
   id:        uuid('id').defaultRandom().primaryKey(),
   userId:    uuid('user_id').notNull(),
   name:      text('name').notNull(),
-  tickers:   text('tickers').array().notNull().default([]),
+  tickers:   text('tickers').array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
