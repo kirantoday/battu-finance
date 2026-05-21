@@ -1,0 +1,20 @@
+{
+  "name": "@battu/validation",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "validate": "tsx src/runner.ts",
+    "report": "tsx src/runner.ts --report",
+    "seed": "tsx src/seedFetcher.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chalk": "^5.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

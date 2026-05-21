@@ -6,6 +6,8 @@ export type {
   FMPRatios, FMPEstimates, FMPGrade, FMPPriceTarget,
   FMPScreenerParams, FMPScreenerResult, FMPEarningsEvent, FMPDividend,
 } from './fmp'
+export { NewsApiClient } from './newsapi'
 export { BenzingaClient } from './benzinga'
-export type { BenzingaNewsItem, BenzingaNewsParams } from './benzinga'
+export type { BenzingaNewsItem } from './benzinga'
+export { createNewsProvider, newsProvider } from './newsFactory'
 export { getDataConfig } from './config'

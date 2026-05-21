@@ -436,10 +436,45 @@ Screener:     /stock-screener?...
 Earnings cal: /earnings-calendar?from=...&to=...
 ```
 
-### Benzinga — packages/data/benzinga.ts
+### News Provider — packages/data/src/newsFactory.ts
+BATTU uses a pluggable news provider. Switch by changing ONE env var:
 ```
-News: /news?tickers={ticker}&pageSize=20&displayOutput=full
+NEWS_PROVIDER=newsapi    ← development (free, newsapi.org)
+NEWS_PROVIDER=benzinga   ← production (paid, $99/mo, benzinga.com)
 ```
+No code changes needed to switch. The factory handles everything. All routes
+and screens call `newsProvider.getTickerNews(...)` etc. — they never know which
+implementation is behind the interface.
+
+### NewsAPI — packages/data/src/newsapi.ts (dev provider)
+```
+Base:           https://newsapi.org/v2
+Auth:           X-Api-Key header
+Ticker news:    /everything?q={ticker}&language=en&sortBy=publishedAt
+Top headlines:  /top-headlines?category=business&language=en
+Search:         /everything?q={query}&language=en&sortBy=relevancy
+```
+Free tier: 100 req/day, CORS blocked (backend only), ~15min delay. Category
+field is derived from headline keyword detection (earnings / analyst / ma /
+macro / general).
+
+### Benzinga — packages/data/src/benzinga.ts (prod provider)
+```
+Base:           https://api.benzinga.com/api/v2
+Auth:           token query param
+Ticker news:    /news?tickers={ticker}&pageSize=20&displayOutput=full
+Top headlines:  /news?pageSize=20&displayOutput=full
+Search:         /news?q={query}&pageSize=20&displayOutput=full
+```
+Paid tier: real-time, financial-specific, native ticker tagging, earnings alerts
+typically faster than the wires. Category mapped from Benzinga's `channels` field.
+
+### To switch to Benzinga when ready
+1. Get Benzinga API key ($99/mo at benzinga.com/apis)
+2. In `.env.local` set: `NEWS_PROVIDER=benzinga`
+3. In `.env.local` set: `BENZINGA_API_KEY=your_key`
+4. Restart API server
+5. Done — no code changes
 
 ### EDGAR — packages/edgar/
 ```

@@ -131,6 +131,44 @@ export interface TickerPrice {
   timestamp: number
 }
 
+// ── News Provider ─────────────────────────────────────────────────────────────
+
+export interface NewsArticle {
+  id:          string        // unique — use url hash if no native id
+  publishedAt: string        // ISO datetime string
+  headline:    string
+  summary:     string | null
+  url:         string
+  source:      string        // e.g. "Reuters", "Bloomberg", "CNBC"
+  author:      string | null
+  tickers:     string[]      // ticker symbols this article relates to
+  category:    'earnings' | 'analyst' | 'ma' | 'macro' | 'general'
+}
+
+export interface NewsProvider {
+  /** News for a specific ticker */
+  getTickerNews(ticker: string, options?: {
+    limit?: number
+    from?:  string   // ISO date
+  }): Promise<NewsArticle[]>
+
+  /** Top market headlines */
+  getTopHeadlines(options?: {
+    limit?: number
+  }): Promise<NewsArticle[]>
+
+  /** Free-text search */
+  search(query: string, options?: {
+    limit?: number
+    from?:  string
+  }): Promise<NewsArticle[]>
+
+  /** Provider name — for logging and UI attribution */
+  readonly providerName: 'newsapi' | 'benzinga'
+}
+
+export type NewsProviderName = 'newsapi' | 'benzinga'
+
 // ── Theme System ──────────────────────────────────────────────────────────────
 
 export type ThemeName = 'amber' | 'ice' | 'phosphor'

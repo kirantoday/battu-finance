@@ -10,7 +10,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: true }
+      '/api': { target: process.env.BATTU_API_URL || 'http://localhost:3000', changeOrigin: true }
     }
   }
 })

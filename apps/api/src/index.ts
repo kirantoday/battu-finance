@@ -1,4 +1,22 @@
-import 'dotenv/config'
+// MUST be the first import — populates process.env before any singleton
+// (e.g. newsProvider) is created during downstream module evaluation.
+import './loadEnv'
+
+// ENV CHECK — print before anything else so misconfigurations are obvious
+console.log('═══════════════════════════════════')
+console.log('  BATTU Finance Screen — API Server')
+console.log('═══════════════════════════════════')
+console.log('ENV:')
+console.log('  POLYGON_API_KEY:   ', process.env.POLYGON_API_KEY   ? '✓' : '✗ MISSING')
+console.log('  FMP_API_KEY:       ', process.env.FMP_API_KEY        ? '✓' : '✗ MISSING')
+console.log('  NEWS_PROVIDER:     ', process.env.NEWS_PROVIDER      || 'newsapi (default)')
+console.log('  NEWSAPI_KEY:       ', process.env.NEWSAPI_KEY        ? '✓' : '✗ MISSING')
+console.log('  BENZINGA_API_KEY:  ', process.env.BENZINGA_API_KEY   ? '✓' : '✗ MISSING')
+console.log('  ANTHROPIC_API_KEY: ', process.env.ANTHROPIC_API_KEY  ? '✓' : '✗ MISSING')
+console.log('  DATABASE_URL:      ', process.env.DATABASE_URL       ? '✓' : '✗ MISSING')
+console.log('  SUPABASE_URL:      ', process.env.SUPABASE_URL       ? '✓' : '✗ MISSING')
+console.log('═══════════════════════════════════')
+
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -14,7 +32,7 @@ import { userRoutes }          from './routes/user'
 
 const app = new Hono()
 
-app.use('*', cors({ origin: ['http://localhost:5173', 'https://battu.finance'] }))
+app.use('*', cors({ origin: [process.env.VITE_APP_URL || 'http://localhost:5173', 'https://battu.finance'] }))
 app.use('*', logger())
 
 // Health check — used by validation suite to confirm API is running

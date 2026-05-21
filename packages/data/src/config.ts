@@ -1,15 +1,20 @@
-// Validated env config — throws at startup if anything missing
+import type { NewsProviderName } from '@battu/shared'
+
+/** Centralized config + soft-warning validator. */
 export function getDataConfig() {
-  const required = ['POLYGON_API_KEY', 'FMP_API_KEY', 'BENZINGA_API_KEY']
-  for (const key of required) {
-    if (!process.env[key]) {
-      throw new Error(`Missing required env var: ${key}`)
-    }
+  const newsProvider = (process.env.NEWS_PROVIDER || 'newsapi') as NewsProviderName
+
+  if (newsProvider === 'benzinga' && !process.env.BENZINGA_API_KEY) {
+    console.warn('[config] NEWS_PROVIDER=benzinga but BENZINGA_API_KEY not set')
   }
+  if (newsProvider === 'newsapi' && !process.env.NEWSAPI_KEY) {
+    console.warn('[config] NEWS_PROVIDER=newsapi but NEWSAPI_KEY not set')
+  }
+
   return {
-    polygon:  { apiKey: process.env.POLYGON_API_KEY! },
-    fmp:      { apiKey: process.env.FMP_API_KEY!, baseUrl: 'https://financialmodelingprep.com/api/v3' },
-    benzinga: { apiKey: process.env.BENZINGA_API_KEY!, baseUrl: 'https://api.benzinga.com/api/v2' },
-    edgar:    { baseUrl: 'https://data.sec.gov', eftsUrl: 'https://efts.sec.gov' },
+    polygon:      { apiKey: process.env.POLYGON_API_KEY || '' },
+    fmp:          { apiKey: process.env.FMP_API_KEY || 'demo', baseUrl: 'https://financialmodelingprep.com/api/v3' },
+    newsProvider,
+    edgar:        { baseUrl: 'https://data.sec.gov', eftsUrl: 'https://efts.sec.gov' },
   }
 }
