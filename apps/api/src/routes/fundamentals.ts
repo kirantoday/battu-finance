@@ -56,25 +56,48 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
   const empNum = profile?.fullTimeEmployees ? Number(String(profile.fullTimeEmployees).replace(/,/g, '')) : NaN
   const employees = Number.isFinite(empNum) && empNum > 0 ? empNum : null
 
-  // Prefer ratios-ttm dividend yield (with FMP typo fallback), then profile
+  // Prefer ratios-ttm dividend yield (covers stable, v3-typo, and lastDividend/price fallback)
+  const lastDividend = profile?.lastDividend ?? profile?.lastDiv
   const divYieldTTM =
        ratios?.dividendYieldTTM
     ?? ratios?.dividendYielTTM
-    ?? (profile?.lastDiv && profile?.price ? profile.lastDiv / profile.price : null)
+    ?? (lastDividend && profile?.price ? lastDividend / profile.price : null)
 
-  // P/E: ratios-ttm first (multiple spellings exist), then key-metrics, then profile
-  const peTTM = ratios?.peRatioTTM ?? ratios?.priceEarningsRatioTTM ?? metrics?.peRatioTTM ?? profile?.pe ?? null
-  const epsTTM = ratios?.epsTTM ?? profile?.eps ?? null
+  // P/E TTM: stable uses priceToEarningsRatioTTM; v3 used peRatioTTM
+  const peTTM =
+       ratios?.priceToEarningsRatioTTM
+    ?? ratios?.peRatioTTM
+    ?? ratios?.priceEarningsRatioTTM
+    ?? metrics?.peRatioTTM
+    ?? profile?.pe
+    ?? null
+
+  // EPS TTM: stable returns netIncomePerShareTTM, v3 had epsTTM, profile sometimes has eps
+  const epsTTM = ratios?.netIncomePerShareTTM ?? ratios?.epsTTM ?? profile?.eps ?? null
+
   const pbRatio = ratios?.priceToBookRatioTTM ?? metrics?.pbRatioTTM ?? metrics?.ptbRatioTTM ?? null
-  const evEbitda = metrics?.evToEbitdaTTM ?? metrics?.enterpriseValueOverEBITDATTM ?? null
 
-  const marketCapRaw = profile?.mktCap ?? 0
-  const sharesOutRaw = profile?.sharesOutstanding ?? 0
+  // EV/EBITDA TTM: stable spells it evToEBITDATTM (capital BITDA); v3 had evToEbitdaTTM /
+  // enterpriseValueOverEBITDATTM; ratios endpoint also has enterpriseValueMultipleTTM
+  const evEbitda =
+       metrics?.evToEBITDATTM
+    ?? metrics?.evToEbitdaTTM
+    ?? metrics?.enterpriseValueOverEBITDATTM
+    ?? ratios?.enterpriseValueMultipleTTM
+    ?? null
+
+  const marketCapRaw = profile?.marketCap ?? profile?.mktCap ?? metrics?.marketCapTTM ?? 0
+  // Stable /profile drops sharesOutstanding — derive from marketCap / price as fallback.
+  const sharesOutRaw =
+       profile?.sharesOutstanding
+    ?? (marketCapRaw > 0 && profile?.price && profile.price > 0 ? marketCapRaw / profile.price : 0)
+  const avgVolume    = profile?.averageVolume ?? profile?.volAvg ?? 0
 
   const des: DESProfile = {
     ticker,
     name:          profile?.companyName || quote?.name || ticker,
-    exchange:      profile?.exchangeShortName || quote?.exchange || '',
+    // Stable returns short name in `exchange` and the long name in `exchangeFullName`.
+    exchange:      profile?.exchange || profile?.exchangeShortName || quote?.exchange || '',
     currency:      profile?.currency || quote?.currency || 'USD',
     country:       profile?.country || 'US',
     isin:          profile?.isin || undefined,
@@ -82,10 +105,10 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
     cik:           profile?.cik || undefined,
 
     price:         quote?.price     ?? profile?.price ?? 0,
-    change:        quote?.change    ?? 0,
-    changePct:     quote?.changePct ?? 0,
-    volume:        quote?.volume    ?? profile?.volAvg ?? 0,
-    avgVolume:     profile?.volAvg  ?? 0,
+    change:        quote?.change    ?? profile?.change ?? profile?.changes ?? 0,
+    changePct:     quote?.changePct ?? profile?.changePercentage ?? 0,
+    volume:        quote?.volume    ?? 0,
+    avgVolume,
     week52High:    quote?.week52High || profile52High,
     week52Low:     quote?.week52Low  || profile52Low,
     open:          quote?.open      ?? 0,

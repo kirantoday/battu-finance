@@ -13,7 +13,7 @@ export function getDataConfig() {
 
   return {
     polygon:      { apiKey: process.env.POLYGON_API_KEY || '' },
-    fmp:          { apiKey: process.env.FMP_API_KEY || 'demo', baseUrl: 'https://financialmodelingprep.com/api/v3' },
+    fmp:          { apiKey: process.env.FMP_API_KEY || 'demo', baseUrl: 'https://financialmodelingprep.com/stable' },
     newsProvider,
     edgar:        { baseUrl: 'https://data.sec.gov', eftsUrl: 'https://efts.sec.gov' },
   }

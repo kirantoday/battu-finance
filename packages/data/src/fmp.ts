@@ -5,18 +5,27 @@ export interface FMPProfile {
   symbol: string
   price: number
   beta: number
-  volAvg: number
-  mktCap: number
-  lastDiv: number
+  // Stable API field names
+  marketCap?: number
+  averageVolume?: number
+  lastDividend?: number
+  change?: number
+  changePercentage?: number
+  exchangeFullName?: string
+  // Legacy v3 field names (kept optional for safety if anyone points back at v3)
+  mktCap?: number
+  volAvg?: number
+  lastDiv?: number
+  changes?: number
+  exchangeShortName?: string
+
   range: string
-  changes: number
   companyName: string
   currency: string
   cik: string
   isin: string
   cusip: string
   exchange: string
-  exchangeShortName: string
   industry: string
   website: string
   description: string
@@ -24,7 +33,7 @@ export interface FMPProfile {
   sector: string
   country: string
   fullTimeEmployees: string
-  // Snapshot fundamentals — present on FMP /profile but not always populated
+  // Stable API also surfaces these snapshot fields
   pe?: number
   eps?: number
   sharesOutstanding?: number
@@ -239,26 +248,36 @@ export interface FMPRatios {
 export interface FMPEstimates {
   symbol: string
   date: string
-  estimatedRevenueLow: number
-  estimatedRevenueHigh: number
-  estimatedRevenueAvg: number
-  estimatedEbitdaLow: number
-  estimatedEbitdaHigh: number
-  estimatedEbitdaAvg: number
-  estimatedEbitLow: number
-  estimatedEbitHigh: number
-  estimatedEbitAvg: number
-  estimatedNetIncomeLow: number
-  estimatedNetIncomeHigh: number
-  estimatedNetIncomeAvg: number
-  estimatedSgaExpenseLow: number
-  estimatedSgaExpenseHigh: number
-  estimatedSgaExpenseAvg: number
-  estimatedEpsAvg: number
-  estimatedEpsHigh: number
-  estimatedEpsLow: number
-  numberAnalystEstimatedRevenue: number
-  numberAnalystsEstimatedEps: number
+  // Stable API names
+  revenueLow?:      number
+  revenueHigh?:     number
+  revenueAvg?:      number
+  ebitdaLow?:       number
+  ebitdaHigh?:      number
+  ebitdaAvg?:       number
+  ebitLow?:         number
+  ebitHigh?:        number
+  ebitAvg?:         number
+  netIncomeLow?:    number
+  netIncomeHigh?:   number
+  netIncomeAvg?:    number
+  sgaExpenseLow?:   number
+  sgaExpenseHigh?:  number
+  sgaExpenseAvg?:   number
+  epsAvg?:          number
+  epsHigh?:         number
+  epsLow?:          number
+  // Legacy v3 names (fallbacks)
+  estimatedRevenueLow?:    number
+  estimatedRevenueHigh?:   number
+  estimatedRevenueAvg?:    number
+  estimatedEbitdaAvg?:     number
+  estimatedNetIncomeAvg?:  number
+  estimatedEpsAvg?:        number
+  estimatedEpsHigh?:       number
+  estimatedEpsLow?:        number
+  numberAnalystEstimatedRevenue?: number
+  numberAnalystsEstimatedEps?:    number
 }
 
 export interface FMPGrade {
@@ -339,28 +358,35 @@ export interface FMPDividend {
 }
 
 export interface FMPRatiosTTM {
-  // FMP exposes both spellings depending on plan/endpoint version
-  dividendYielTTM?:           number
-  dividendYieldTTM?:          number
-  peRatioTTM?:                number
-  pegRatioTTM?:               number
-  payoutRatioTTM?:            number
-  currentRatioTTM?:           number
-  quickRatioTTM?:             number
-  cashRatioTTM?:              number
-  grossProfitMarginTTM?:      number
-  operatingProfitMarginTTM?:  number
-  pretaxProfitMarginTTM?:     number
-  netProfitMarginTTM?:        number
-  returnOnAssetsTTM?:         number
-  returnOnEquityTTM?:         number
-  debtRatioTTM?:              number
-  debtEquityRatioTTM?:        number
-  priceToBookRatioTTM?:       number
-  priceToSalesRatioTTM?:      number
-  priceEarningsRatioTTM?:     number
-  enterpriseValueMultipleTTM?: number
-  epsTTM?:                    number
+  // Stable API names
+  priceToEarningsRatioTTM?:           number
+  priceToBookRatioTTM?:               number
+  priceToSalesRatioTTM?:              number
+  dividendYieldTTM?:                  number
+  dividendPerShareTTM?:               number
+  grossProfitMarginTTM?:              number
+  operatingProfitMarginTTM?:          number
+  netProfitMarginTTM?:                number
+  pretaxProfitMarginTTM?:             number
+  ebitdaMarginTTM?:                   number
+  ebitMarginTTM?:                     number
+  netIncomePerShareTTM?:              number
+  enterpriseValueMultipleTTM?:        number
+  enterpriseValueTTM?:                number
+  // Legacy v3 names (kept as fallbacks)
+  peRatioTTM?:                        number
+  priceEarningsRatioTTM?:             number
+  pegRatioTTM?:                       number
+  payoutRatioTTM?:                    number
+  currentRatioTTM?:                   number
+  quickRatioTTM?:                     number
+  cashRatioTTM?:                      number
+  returnOnAssetsTTM?:                 number
+  returnOnEquityTTM?:                 number
+  debtRatioTTM?:                      number
+  debtEquityRatioTTM?:                number
+  dividendYielTTM?:                   number   // FMP v3 typo
+  epsTTM?:                            number
 }
 
 export interface FMPKeyMetricsTTM {
@@ -393,6 +419,7 @@ export interface FMPKeyMetricsTTM {
   interestCoverageTTM?:          number
   // FMP exposes EV/EBITDA TTM under multiple field names depending on plan
   evToEbitdaTTM?:                number
+  evToEBITDATTM?:                number  // stable API name (capital BITDA)
 }
 
 export class FMPClient {
@@ -419,8 +446,8 @@ export class FMPClient {
   }
 
   async getProfile(ticker: string): Promise<FMPProfile> {
-    const res = await this.get<FMPProfile[]>(`/profile/${ticker.toUpperCase()}`)
-    return res[0]
+    const res = await this.get<FMPProfile[]>(`/profile`, { symbol: ticker.toUpperCase() })
+    return res?.[0]
   }
 
   async getIncomeStatement(
@@ -429,7 +456,7 @@ export class FMPClient {
     limit = 10
   ): Promise<FMPIncomeStatement[]> {
     return this.get<FMPIncomeStatement[]>(
-      `/income-statement/${ticker.toUpperCase()}`, { period, limit }
+      `/income-statement`, { symbol: ticker.toUpperCase(), period, limit }
     )
   }
 
@@ -439,7 +466,7 @@ export class FMPClient {
     limit = 10
   ): Promise<FMPBalanceSheet[]> {
     return this.get<FMPBalanceSheet[]>(
-      `/balance-sheet-statement/${ticker.toUpperCase()}`, { period, limit }
+      `/balance-sheet-statement`, { symbol: ticker.toUpperCase(), period, limit }
     )
   }
 
@@ -449,46 +476,50 @@ export class FMPClient {
     limit = 10
   ): Promise<FMPCashFlow[]> {
     return this.get<FMPCashFlow[]>(
-      `/cash-flow-statement/${ticker.toUpperCase()}`, { period, limit }
+      `/cash-flow-statement`, { symbol: ticker.toUpperCase(), period, limit }
     )
   }
 
   async getRatios(ticker: string): Promise<FMPRatios> {
-    const res = await this.get<FMPRatios[]>(`/ratios/${ticker.toUpperCase()}`)
-    return res[0]
+    const res = await this.get<FMPRatios[]>(`/ratios`, { symbol: ticker.toUpperCase() })
+    return res?.[0]
   }
 
   async getRatiosTTM(ticker: string): Promise<FMPRatiosTTM | null> {
-    const res = await this.get<FMPRatiosTTM[]>(`/ratios-ttm/${ticker.toUpperCase()}`)
+    const res = await this.get<FMPRatiosTTM[]>(`/ratios-ttm`, { symbol: ticker.toUpperCase() })
     return res?.[0] ?? null
   }
 
   async getKeyMetricsTTM(ticker: string): Promise<FMPKeyMetricsTTM | null> {
-    const res = await this.get<FMPKeyMetricsTTM[]>(`/key-metrics-ttm/${ticker.toUpperCase()}`)
+    const res = await this.get<FMPKeyMetricsTTM[]>(`/key-metrics-ttm`, { symbol: ticker.toUpperCase() })
     return res?.[0] ?? null
   }
 
   async getPeers(ticker: string): Promise<string[]> {
-    const res = await this.get<{ symbol: string; peersList: string[] }[]>(
-      `/stock_peers`, { symbol: ticker.toUpperCase() }
+    const res = await this.get<{ symbol: string; peersList?: string[] }[]>(
+      `/stock-peers`, { symbol: ticker.toUpperCase() }
     )
-    return res[0]?.peersList ?? []
+    return res?.[0]?.peersList ?? []
   }
 
   async getAnalystEstimates(ticker: string): Promise<FMPEstimates> {
-    const res = await this.get<FMPEstimates[]>(`/analyst-estimates/${ticker.toUpperCase()}`)
-    return res[0]
+    // Stable requires `period` (annual|quarter). limit=1 → next year only.
+    const res = await this.get<FMPEstimates[]>(`/analyst-estimates`, {
+      symbol: ticker.toUpperCase(), period: 'annual', limit: 1,
+    })
+    return res?.[0]
   }
 
   async getGrades(ticker: string): Promise<FMPGrade[]> {
-    return this.get<FMPGrade[]>(`/grade/${ticker.toUpperCase()}`)
+    // The stable API renamed /grade/{ticker} → /analyst-recommendation?symbol=
+    return this.get<FMPGrade[]>(`/analyst-recommendation`, { symbol: ticker.toUpperCase() })
   }
 
   async getPriceTargetConsensus(ticker: string): Promise<FMPPriceTarget> {
     const res = await this.get<FMPPriceTarget[]>(
       `/price-target-consensus`, { symbol: ticker.toUpperCase() }
     )
-    return res[0]
+    return res?.[0]
   }
 
   async getScreener(params: FMPScreenerParams): Promise<FMPScreenerResult[]> {
@@ -496,7 +527,7 @@ export class FMPClient {
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined) stringParams[k] = v
     }
-    return this.get<FMPScreenerResult[]>(`/stock-screener`, stringParams)
+    return this.get<FMPScreenerResult[]>(`/company-screener`, stringParams)
   }
 
   async getEarningsCalendar(from: string, to: string): Promise<FMPEarningsEvent[]> {
@@ -504,9 +535,6 @@ export class FMPClient {
   }
 
   async getDividends(ticker: string): Promise<FMPDividend[]> {
-    const res = await this.get<{ symbol: string; historical: FMPDividend[] }>(
-      `/historical-price-full/stock_dividend/${ticker.toUpperCase()}`
-    )
-    return res.historical ?? []
+    return this.get<FMPDividend[]>(`/dividends`, { symbol: ticker.toUpperCase() })
   }
 }

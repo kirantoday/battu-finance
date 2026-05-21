@@ -3,7 +3,7 @@ import { FMPClient } from './fmp'
 /** Singleton FMP client — instantiated lazily from env at first import. */
 export const fmpClient = new FMPClient(
   process.env.FMP_API_KEY || 'demo',
-  'https://financialmodelingprep.com/api/v3',
+  'https://financialmodelingprep.com/stable',
 )
 
 export { PolygonClient } from './polygon'
