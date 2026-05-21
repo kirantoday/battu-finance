@@ -210,3 +210,94 @@ export function buildFilingUrl(cik: string, accessionNumber: string, primaryDocu
   // Archives live on www.sec.gov, not data.sec.gov.
   return `${WWW_BASE}/Archives/edgar/data/${cikNum}/${accessionNumber.replace(/-/g, '')}/${primaryDocument}`
 }
+
+// ── XBRL company facts (free fallback for cash/burn data) ───────────────────
+// SEC publishes structured XBRL data for every filer on /api/xbrl/companyfacts.
+// This is the cleanest free source for cash position when FMP gates these
+// endpoints behind a paid plan.
+
+export interface XBRLCompanyFacts {
+  cik:       number
+  entityName: string
+  facts?: {
+    'us-gaap'?: Record<string, {
+      label?: string
+      units?: Record<string, Array<{
+        val:   number
+        end:   string
+        form:  string
+        fp?:   string
+        fy?:   number
+        accn?: string
+      }>>
+    }>
+  }
+}
+
+export async function getXBRLCompanyFacts(cik: string): Promise<XBRLCompanyFacts | null> {
+  try {
+    const res = await rateLimitedFetch(`${EDGAR_BASE}/api/xbrl/companyfacts/CIK${cik}.json`)
+    if (!res.ok) {
+      console.warn(`[edgar] XBRL facts CIK${cik} → ${res.status}`)
+      return null
+    }
+    return await res.json() as XBRLCompanyFacts
+  } catch (e) {
+    console.warn(`[edgar] XBRL facts error: ${(e as Error).message}`)
+    return null
+  }
+}
+
+/** Most recent USD-denominated value for a us-gaap concept, optionally filtered by form. */
+function getMostRecentXBRLValue(
+  facts: XBRLCompanyFacts | null,
+  concept: string,
+  form?: string,
+): number | null {
+  try {
+    const entries = facts?.facts?.['us-gaap']?.[concept]?.units?.USD
+    if (!entries?.length) return null
+    const filtered = form ? entries.filter(e => e.form === form) : entries
+    if (!filtered.length) return null
+    const sorted = [...filtered].sort((a, b) =>
+      new Date(b.end).getTime() - new Date(a.end).getTime()
+    )
+    return sorted[0]?.val ?? null
+  } catch { return null }
+}
+
+export interface XBRLCashData {
+  cashAndEquiv:    number | null
+  shortTermInvest: number | null
+  operatingCF:     number | null
+  capex:           number | null
+}
+
+/** Cash position from XBRL — quarterly preferred, annual fallback. */
+export async function getXBRLCashData(cik: string): Promise<XBRLCashData | null> {
+  const facts = await getXBRLCompanyFacts(cik)
+  if (!facts) return null
+
+  const cashAndEquiv =
+       getMostRecentXBRLValue(facts, 'CashAndCashEquivalentsAtCarryingValue', '10-Q')
+    ?? getMostRecentXBRLValue(facts, 'CashAndCashEquivalentsAtCarryingValue', '10-K')
+    ?? null
+
+  const shortTermInvest =
+       getMostRecentXBRLValue(facts, 'ShortTermInvestments',         '10-Q')
+    ?? getMostRecentXBRLValue(facts, 'MarketableSecuritiesCurrent',  '10-Q')
+    ?? getMostRecentXBRLValue(facts, 'ShortTermInvestments',         '10-K')
+    ?? null
+
+  const operatingCF =
+       getMostRecentXBRLValue(facts, 'NetCashProvidedByUsedInOperatingActivities', '10-Q')
+    ?? getMostRecentXBRLValue(facts, 'NetCashProvidedByUsedInOperatingActivities', '10-K')
+    ?? null
+
+  const capex =
+       getMostRecentXBRLValue(facts, 'PaymentsToAcquirePropertyPlantAndEquipment', '10-Q')
+    ?? getMostRecentXBRLValue(facts, 'PaymentsToAcquirePropertyPlantAndEquipment', '10-K')
+    ?? null
+
+  return { cashAndEquiv, shortTermInvest, operatingCF, capex }
+}

@@ -5,8 +5,10 @@ export {
   fetchFilingDocument,
   getFilingsList,
   buildFilingUrl,
+  getXBRLCompanyFacts,
+  getXBRLCashData,
 } from './client'
-export type { FilingHit, FilingListItem, SubmissionsResponse } from './client'
+export type { FilingHit, FilingListItem, SubmissionsResponse, XBRLCompanyFacts, XBRLCashData } from './client'
 
 export {
   extractShelfAmount,

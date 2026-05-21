@@ -4,7 +4,7 @@
 // session 6B ingestion pipeline.
 
 import type { LIQData, LIQProgress } from '@battu/shared'
-import { getCIK, getFilingsList, fetchFilingDocument, buildFilingUrl } from './client'
+import { getCIK, getFilingsList, fetchFilingDocument, buildFilingUrl, getXBRLCashData } from './client'
 import { extractShelfAmount, extract424BAmount, extractCreditFacility } from './liqExtractor'
 
 // Re-export so existing @battu/edgar consumers continue to work.
@@ -29,21 +29,31 @@ export async function computeLIQ(
   const missing: string[] = []
   const sources: LIQData['sources'] = {}
 
-  // ── Step 1: FMP balance sheet + cash flow ─────────────────────────────────
-  progress('Fetching balance sheet data...')
-  let cashB: number | null    = null
-  let investB: number | null  = null
-  let burnB: number | null    = null
+  // ── Step 0: Resolve CIK (needed for both XBRL fallback and EDGAR filings) ─
+  progress('Resolving SEC CIK...')
+  const cik = await getCIK(ticker)
+  if (!cik) {
+    progress('CIK resolution', false, 'Not found in EDGAR ticker index')
+    missing.push('shelf', 'creditFacility')
+    // Don't early-return — FMP may still provide cash position for the ticker.
+  }
 
-  // Try quarter first (freshest), fall back to annual if FMP plan rejects it.
+  // ── Step 1: Balance sheet — FMP first, EDGAR XBRL free fallback ──────────
+  progress('Fetching balance sheet data...')
+  let cashB: number | null   = null
+  let investB: number | null = null
+  let burnB: number | null   = null
+  let usedXBRL = false
+
+  // FMP: try quarter first (freshest), fall back to annual if plan rejects it.
   const tryFmp = async (
     call:     () => Promise<any[]>,
     fallback: () => Promise<any[]>,
   ): Promise<any[] | null> => {
     try { return await call() } catch (e1) {
-      console.warn(`[LIQ ${ticker}] quarter fetch failed, trying annual: ${(e1 as Error).message}`)
+      console.warn(`[LIQ ${ticker}] FMP quarter failed, trying annual: ${(e1 as Error).message}`)
       try { return await fallback() } catch (e2) {
-        console.warn(`[LIQ ${ticker}] annual fetch also failed: ${(e2 as Error).message}`)
+        console.warn(`[LIQ ${ticker}] FMP annual also failed: ${(e2 as Error).message}`)
         return null
       }
     }
@@ -69,43 +79,59 @@ export async function computeLIQ(
       const stOnly    = bs.shortTermInvestments ?? null
       cashB   = cashAndSt != null ? cashAndSt / 1e9 : cashOnly != null ? cashOnly / 1e9 : null
       investB = stOnly != null ? stOnly / 1e9 : null
-    } else {
-      missing.push('cashAndEquiv')
     }
 
     if (cf) {
       const ocf   = cf.operatingCashFlow ?? cf.netCashProvidedByOperatingActivities ?? null
       const capex = cf.capitalExpenditure ?? cf.capitalExpenditures ?? null
       if (ocf != null && ocf < 0) {
-        // Quarterly burn = |negative OCF| + |capex|
         burnB = (Math.abs(ocf) + Math.abs(capex ?? 0)) / 1e9
       } else if (ocf != null && capex != null && Math.abs(capex) > ocf) {
-        // Profitable on OCF but capex exceeds — net cash outflow scenario
         burnB = (Math.abs(capex) - ocf) / 1e9
       } else {
-        burnB = null  // profitable, runway not meaningful
+        burnB = null
       }
-    } else {
-      missing.push('quarterlyBurn')
     }
   } catch (err) {
     progress('Balance sheet data', false, (err as Error).message)
-    missing.push('cashAndEquiv', 'quarterlyBurn')
+  }
+
+  // EDGAR XBRL fallback — free for every filer, no plan required.
+  if (cashB === null && cik) {
+    progress('FMP unavailable — fetching from EDGAR XBRL (free)...')
+    usedXBRL = true
+    try {
+      const xbrl = await getXBRLCashData(cik)
+      if (xbrl) {
+        cashB   = xbrl.cashAndEquiv    != null ? xbrl.cashAndEquiv    / 1e9 : cashB
+        investB = xbrl.shortTermInvest != null ? xbrl.shortTermInvest / 1e9 : investB
+        if (burnB === null && xbrl.operatingCF != null) {
+          const ocf   = Math.abs(xbrl.operatingCF)
+          const capex = Math.abs(xbrl.capex ?? 0)
+          burnB = (ocf + capex) / 1e9
+        }
+      }
+    } catch (e) {
+      console.warn(`[LIQ ${ticker}] XBRL fallback error: ${(e as Error).message}`)
+    }
+  }
+
+  if (cashB === null) missing.push('cashAndEquiv')
+  if (burnB === null) missing.push('quarterlyBurn')
+
+  if (usedXBRL && cik) {
+    sources.balanceSheet = `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`
   }
 
   const cashRunwayQtrs =
     cashB != null && burnB != null && burnB > 0 ? cashB / burnB : null
 
-  // ── Step 2: CIK ───────────────────────────────────────────────────────────
-  progress('Resolving SEC CIK...')
-  const cik = await getCIK(ticker)
+  // ── Without a CIK there's no path forward to shelf / credit ───────────────
   if (!cik) {
-    progress('CIK resolution', false, 'Not found in EDGAR ticker index')
-    missing.push('shelf', 'creditFacility')
     return finalize(ticker, { cashB, investB, burnB, cashRunwayQtrs, missing, sources })
   }
 
-  // ── Step 3: Locate the most recent S-3 ────────────────────────────────────
+  // ── Step 2: Locate the most recent S-3 ────────────────────────────────────
   progress('Searching for shelf registration (S-3)...')
   const shelfFilings = await getFilingsList(cik, ['S-3', 'S-3/A', 'S-3ASR'])
 
@@ -134,7 +160,7 @@ export async function computeLIQ(
       }
     }
 
-    // ── Step 4: 424B drawdowns since S-3 ────────────────────────────────────
+    // ── Step 3: 424B drawdowns since S-3 ────────────────────────────────────
     if (shelfTotalB != null) {
       progress('Calculating ATM drawdowns (424B filings)...')
       const allDrawdowns = await getFilingsList(cik, ['424B3', '424B5', '424B4', '424B2'])
@@ -161,7 +187,7 @@ export async function computeLIQ(
     missing.push('shelf')
   }
 
-  // ── Step 5: 10-K → credit facility ────────────────────────────────────────
+  // ── Step 4: 10-K → credit facility ────────────────────────────────────────
   progress('Searching for credit facility (10-K)...')
   const annuals = await getFilingsList(cik, ['10-K'])
 
@@ -198,7 +224,7 @@ export async function computeLIQ(
     missing.push('creditFacility')
   }
 
-  // ── Step 6: Total liquidity ───────────────────────────────────────────────
+  // ── Step 5: Total liquidity ───────────────────────────────────────────────
   progress('Computing total liquidity...')
   const totalLiqParts = [cashB, investB, cfUndrawn, shelfRemainingB].filter(v => v != null) as number[]
   const totalLiqB = totalLiqParts.length > 0 ? totalLiqParts.reduce((s, v) => s + v, 0) : null
