@@ -1,4 +1,5 @@
 import { useTerminal } from '@/store/terminal'
+import { DESScreen } from '@/screens/DES'
 
 export function ScreenRouter() {
   const currentScreen = useTerminal((s) => s.currentScreen)
@@ -8,8 +9,10 @@ export function ScreenRouter() {
     return <WelcomeScreen />
   }
 
-  // Each screen will be imported here as it is built.
-  // For now all return a stub.
+  // Real screens
+  if (currentScreen === 'DES') return <DESScreen />
+
+  // Stub fallback for screens not yet implemented
   return (
     <div
       className="flex-1"

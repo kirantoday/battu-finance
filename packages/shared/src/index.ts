@@ -131,6 +131,56 @@ export interface TickerPrice {
   timestamp: number
 }
 
+// ── DES Profile (Security Description response) ───────────────────────────────
+
+export interface DESProfile {
+  // Identity
+  ticker:           string
+  name:             string
+  exchange:         string
+  currency:         string
+  country:          string
+  isin?:            string
+  cusip?:           string
+  cik?:             string
+
+  // Price (from market provider — more real-time than FMP)
+  price:            number
+  change:           number
+  changePct:        number
+  volume:           number
+  avgVolume:        number
+  week52High:       number
+  week52Low:        number
+  open:             number
+  prevClose:        number
+
+  // Fundamentals
+  marketCapB:       number    // in billions
+  sharesOutB:       number    // in billions
+  peRatioTTM:       number | null
+  epsTTM:           number | null
+  dividendYield:    number | null  // as decimal — 0.005 = 0.5%
+  beta:             number | null
+  pbRatio:          number | null
+  evEbitda:         number | null
+
+  // Company info
+  sector:           string
+  industry:         string
+  ceo:              string
+  employees:        number | null
+  founded:          string | null
+  website:          string
+  description:      string
+
+  // Next earnings
+  nextEarningsDate: string | null  // ISO date
+
+  // SEC
+  secFilingsUrl:    string
+}
+
 // ── Market Data ───────────────────────────────────────────────────────────────
 
 export interface OHLCVBar {

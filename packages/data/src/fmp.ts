@@ -24,6 +24,10 @@ export interface FMPProfile {
   sector: string
   country: string
   fullTimeEmployees: string
+  // Snapshot fundamentals — present on FMP /profile but not always populated
+  pe?: number
+  eps?: number
+  sharesOutstanding?: number
   phone: string
   address: string
   city: string
@@ -334,6 +338,63 @@ export interface FMPDividend {
   declarationDate: string
 }
 
+export interface FMPRatiosTTM {
+  // FMP exposes both spellings depending on plan/endpoint version
+  dividendYielTTM?:           number
+  dividendYieldTTM?:          number
+  peRatioTTM?:                number
+  pegRatioTTM?:               number
+  payoutRatioTTM?:            number
+  currentRatioTTM?:           number
+  quickRatioTTM?:             number
+  cashRatioTTM?:              number
+  grossProfitMarginTTM?:      number
+  operatingProfitMarginTTM?:  number
+  pretaxProfitMarginTTM?:     number
+  netProfitMarginTTM?:        number
+  returnOnAssetsTTM?:         number
+  returnOnEquityTTM?:         number
+  debtRatioTTM?:              number
+  debtEquityRatioTTM?:        number
+  priceToBookRatioTTM?:       number
+  priceToSalesRatioTTM?:      number
+  priceEarningsRatioTTM?:     number
+  enterpriseValueMultipleTTM?: number
+  epsTTM?:                    number
+}
+
+export interface FMPKeyMetricsTTM {
+  revenuePerShareTTM?:           number
+  netIncomePerShareTTM?:         number
+  operatingCashFlowPerShareTTM?: number
+  freeCashFlowPerShareTTM?:      number
+  cashPerShareTTM?:              number
+  bookValuePerShareTTM?:         number
+  tangibleBookValuePerShareTTM?: number
+  shareholdersEquityPerShareTTM?: number
+  marketCapTTM?:                 number
+  enterpriseValueTTM?:           number
+  peRatioTTM?:                   number
+  priceToSalesRatioTTM?:         number
+  pocfratioTTM?:                 number
+  pfcfRatioTTM?:                 number
+  pbRatioTTM?:                   number
+  ptbRatioTTM?:                  number
+  evToSalesTTM?:                 number
+  enterpriseValueOverEBITDATTM?: number
+  evToOperatingCashFlowTTM?:     number
+  evToFreeCashFlowTTM?:          number
+  earningsYieldTTM?:             number
+  freeCashFlowYieldTTM?:         number
+  debtToEquityTTM?:              number
+  debtToAssetsTTM?:              number
+  netDebtToEBITDATTM?:           number
+  currentRatioTTM?:              number
+  interestCoverageTTM?:          number
+  // FMP exposes EV/EBITDA TTM under multiple field names depending on plan
+  evToEbitdaTTM?:                number
+}
+
 export class FMPClient {
   constructor(private apiKey: string, private baseUrl: string) {}
 
@@ -347,7 +408,14 @@ export class FMPClient {
     if (!res.ok) {
       throw new Error(`FMP ${path} failed: ${res.status} ${res.statusText}`)
     }
-    return res.json() as Promise<T>
+    const body = await res.json()
+    // FMP returns its "no auth / no plan" errors as HTTP 200 with a JSON
+    // envelope { "Error Message": "..." }. Surface that as a real error so
+    // Promise.allSettled in callers can treat it as a rejected source.
+    if (body && typeof body === 'object' && !Array.isArray(body) && 'Error Message' in body) {
+      throw new Error(`FMP ${path}: ${(body as { 'Error Message': string })['Error Message']}`)
+    }
+    return body as T
   }
 
   async getProfile(ticker: string): Promise<FMPProfile> {
@@ -388,6 +456,16 @@ export class FMPClient {
   async getRatios(ticker: string): Promise<FMPRatios> {
     const res = await this.get<FMPRatios[]>(`/ratios/${ticker.toUpperCase()}`)
     return res[0]
+  }
+
+  async getRatiosTTM(ticker: string): Promise<FMPRatiosTTM | null> {
+    const res = await this.get<FMPRatiosTTM[]>(`/ratios-ttm/${ticker.toUpperCase()}`)
+    return res?.[0] ?? null
+  }
+
+  async getKeyMetricsTTM(ticker: string): Promise<FMPKeyMetricsTTM | null> {
+    const res = await this.get<FMPKeyMetricsTTM[]>(`/key-metrics-ttm/${ticker.toUpperCase()}`)
+    return res?.[0] ?? null
   }
 
   async getPeers(ticker: string): Promise<string[]> {

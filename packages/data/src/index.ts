@@ -1,9 +1,17 @@
+import { FMPClient } from './fmp'
+
+/** Singleton FMP client — instantiated lazily from env at first import. */
+export const fmpClient = new FMPClient(
+  process.env.FMP_API_KEY || 'demo',
+  'https://financialmodelingprep.com/api/v3',
+)
+
 export { PolygonClient } from './polygon'
 export type { PolygonBar, PolygonSnapshot, AggsOptions } from './polygon'
 export { FMPClient } from './fmp'
 export type {
   FMPProfile, FMPIncomeStatement, FMPBalanceSheet, FMPCashFlow,
-  FMPRatios, FMPEstimates, FMPGrade, FMPPriceTarget,
+  FMPRatios, FMPRatiosTTM, FMPKeyMetricsTTM, FMPEstimates, FMPGrade, FMPPriceTarget,
   FMPScreenerParams, FMPScreenerResult, FMPEarningsEvent, FMPDividend,
 } from './fmp'
 export { NewsApiClient } from './newsapi'
