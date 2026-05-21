@@ -131,6 +131,56 @@ export interface TickerPrice {
   timestamp: number
 }
 
+// ── LIQ (Liquidity / Cash Runway) ─────────────────────────────────────────────
+
+export interface LIQData {
+  ticker:              string
+  computedAt:          string
+
+  // Cash position
+  cashAndEquivB:       number | null   // billions
+  shortTermInvestB:    number | null
+  quarterlyBurnB:      number | null
+  cashRunwayQtrs:      number | null
+
+  // Shelf registration
+  hasShelf:            boolean
+  shelfTotalB:         number | null
+  shelfDrawdownsB:     number | null
+  shelfRemainingB:     number | null
+  shelfFilingDate:     string | null
+  shelfExpiryDate:     string | null
+  isATMProgram:        boolean
+
+  // Credit facility
+  hasCreditFacility:   boolean
+  creditFacilityType:  string | null
+  creditTotalB:        number | null
+  creditDrawnB:        number | null
+  creditUndrawnB:      number | null
+  creditExpiryDate:    string | null
+  creditLender:        string | null
+  creditInterestRate:  string | null
+
+  totalLiquidityB:     number | null
+
+  sources: {
+    balanceSheet?: string
+    shelfFiling?:  string
+    creditFiling?: string
+    drawdowns?:    string[]
+  }
+
+  dataQuality:    'full' | 'partial' | 'minimal'
+  missingFields:  string[]
+}
+
+export interface LIQProgress {
+  step:    string
+  done:    boolean
+  error?:  string
+}
+
 // ── FA Financial Analysis (Income/Balance/CashFlow combined) ──────────────────
 
 export interface FAStatement {

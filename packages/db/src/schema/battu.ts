@@ -61,10 +61,12 @@ export const alerts = battuSchema.table('alerts', {
 })
 
 export const liqCache = battuSchema.table('liq_cache', {
-  ticker:         text('ticker').primaryKey(),
-  computedAt:     timestamp('computed_at').notNull(),
-  data:           jsonb('data').notNull(),
-  sourceFilings:  jsonb('source_filings').notNull().default({}),
+  ticker:            text('ticker').primaryKey(),
+  computedAt:        timestamp('computed_at').notNull(),
+  data:              jsonb('data').notNull(),
+  sourceFilings:     jsonb('source_filings').notNull().default(sql`'{}'::jsonb`),
+  ingestionVersion:  text('ingestion_version').default('v1'),
+  tickerCik:         text('ticker_cik'),
 })
 
 export const queryHistory = battuSchema.table('query_history', {

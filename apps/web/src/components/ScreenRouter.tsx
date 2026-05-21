@@ -4,6 +4,7 @@ import { GPScreen }  from '@/screens/GP'
 import { FAScreen }  from '@/screens/FA'
 import { NIScreen }  from '@/screens/NI'
 import { WLScreen }  from '@/screens/WL'
+import { LIQScreen } from '@/screens/LIQ'
 
 export function ScreenRouter() {
   const currentScreen = useTerminal((s) => s.currentScreen)
@@ -27,6 +28,7 @@ export function ScreenRouter() {
     currentScreen === 'TOP'
   ) return <NIScreen />
   if (currentScreen === 'WL') return <WLScreen />
+  if (currentScreen === 'LIQ') return <LIQScreen />
 
   // Stub fallback for screens not yet implemented
   return (
