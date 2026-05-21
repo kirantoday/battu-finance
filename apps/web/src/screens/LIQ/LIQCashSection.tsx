@@ -40,21 +40,24 @@ export function LIQCashSection({ data }: Props) {
       }}>
         CASH POSITION
       </div>
-      {rows.map(({ label, value, color, bold }) => (
-        <div key={label} style={{
-          display:        'flex',
-          justifyContent: 'space-between',
-          padding:        '4px 0',
-          borderBottom:   '1px solid var(--battu-divider)',
-        }}>
-          <span style={{ color: 'var(--battu-text)', fontSize: '10px', fontWeight: bold ? 'bold' : 'normal' }}>
-            {label}
-          </span>
-          <span style={{ color, fontSize: '11px', fontWeight: bold ? 'bold' : 'normal', fontFamily: 'JetBrains Mono, monospace' }}>
-            {value}
-          </span>
-        </div>
-      ))}
+      <div style={{ maxWidth: '600px' }}>
+        {rows.map(({ label, value, color, bold }) => (
+          <div key={label} style={{
+            display:             'grid',
+            gridTemplateColumns: '240px 1fr',
+            gap:                 '16px',
+            padding:             '4px 0',
+            borderBottom:        '1px solid var(--battu-divider)',
+          }}>
+            <span style={{ color: 'var(--battu-text)', fontSize: '10px', fontWeight: bold ? 'bold' : 'normal' }}>
+              {label}
+            </span>
+            <span style={{ color, fontSize: '11px', fontWeight: bold ? 'bold' : 'normal', fontFamily: 'JetBrains Mono, monospace' }}>
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

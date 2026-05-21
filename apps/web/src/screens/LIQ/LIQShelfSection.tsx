@@ -32,10 +32,11 @@ const sectionHeader = (label: string) => (
 
 const renderRow = ({ label, value, color, bold }: Row) => (
   <div key={label} style={{
-    display:        'flex',
-    justifyContent: 'space-between',
-    padding:        '4px 0',
-    borderBottom:   '1px solid var(--battu-divider)',
+    display:             'grid',
+    gridTemplateColumns: '240px 1fr',
+    gap:                 '16px',
+    padding:             '4px 0',
+    borderBottom:        '1px solid var(--battu-divider)',
   }}>
     <span style={{ color: 'var(--battu-text)', fontSize: '10px', fontWeight: bold ? 'bold' : 'normal' }}>
       {label}
@@ -88,19 +89,21 @@ export function LIQShelfSection({ data }: Props) {
     return (
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--battu-border)' }}>
         {sectionHeader(sectionLabel)}
-        {rows.map(renderRow)}
-        <div style={{
-          marginTop:  '8px',
-          padding:    '6px 10px',
-          background: 'var(--battu-surface)',
-          border:     '1px solid var(--battu-border)',
-          color:      'var(--battu-muted)',
-          fontSize:   '9px',
-          lineHeight: '1.6',
-        }}>
-          Well-Known Seasoned Issuer — automatic shelf registration with no dollar
-          cap. Company may issue any amount of securities at any time without
-          prior SEC review or dollar limit.
+        <div style={{ maxWidth: '600px' }}>
+          {rows.map(renderRow)}
+          <div style={{
+            marginTop:  '8px',
+            padding:    '6px 10px',
+            background: 'var(--battu-surface)',
+            border:     '1px solid var(--battu-border)',
+            color:      'var(--battu-muted)',
+            fontSize:   '9px',
+            lineHeight: '1.6',
+          }}>
+            Well-Known Seasoned Issuer — automatic shelf registration with no dollar
+            cap. Company may issue any amount of securities at any time without
+            prior SEC review or dollar limit.
+          </div>
         </div>
       </div>
     )
@@ -123,7 +126,9 @@ export function LIQShelfSection({ data }: Props) {
   return (
     <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--battu-border)' }}>
       {sectionHeader(sectionLabel)}
-      {rows.map(renderRow)}
+      <div style={{ maxWidth: '600px' }}>
+        {rows.map(renderRow)}
+      </div>
     </div>
   )
 }

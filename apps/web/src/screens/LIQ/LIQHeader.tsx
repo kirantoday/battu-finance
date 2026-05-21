@@ -27,7 +27,14 @@ export function LIQHeader({ ticker, data, cached, stale, onRefresh }: Props) {
       <div style={{ color: 'var(--battu-muted)', fontSize: '10px', letterSpacing: '2px', marginBottom: '3px' }}>
         LIQ — LIQUIDITY ANALYSIS
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+      <div style={{
+        display:        'flex',
+        justifyContent: 'space-between',
+        alignItems:     'center',
+        flexWrap:       'wrap',
+        gap:            '16px',
+        maxWidth:       '600px',
+      }}>
         <div style={{ color: 'var(--battu-title-color)', fontSize: '14px', fontWeight: 'bold' }}>
           {ticker}
           <span style={{ color: qualityColor, fontSize: '9px', marginLeft: '10px', letterSpacing: '1px' }}>

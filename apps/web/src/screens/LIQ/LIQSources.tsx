@@ -20,13 +20,15 @@ export function LIQSources({ data }: Props) {
     <div style={{ padding: '12px 16px' }}>
       {totalB != null && (
         <div style={{
-          display:        'flex',
-          justifyContent: 'space-between',
-          alignItems:     'center',
-          padding:        '10px 14px',
-          marginBottom:   '12px',
-          border:         '1px solid var(--battu-accent)',
-          background:     'var(--battu-surface)',
+          display:             'grid',
+          gridTemplateColumns: '240px 1fr',
+          gap:                 '16px',
+          alignItems:          'center',
+          padding:             '10px 14px',
+          marginBottom:        '12px',
+          border:              '1px solid var(--battu-accent)',
+          background:          'var(--battu-surface)',
+          maxWidth:            '600px',
         }}>
           <span style={{ color: 'var(--battu-accent)', fontSize: '10px', letterSpacing: '2px', fontWeight: 'bold' }}>
             TOTAL LIQUIDITY
