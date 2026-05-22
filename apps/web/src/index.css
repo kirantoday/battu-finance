@@ -2,15 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+/* JetBrains Mono is loaded via <link> in index.html (preconnect + full weights). */
 
 /* ── CSS Variables — set by applyThemeToDom on load + theme change ── */
 :root {
+  --battu-font:          'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
   --battu-bg:            #0D0A00;
   --battu-surface:       #130E00;
   --battu-border:        #1F1500;
-  --battu-text:          #F5CC60;
-  --battu-muted:         #78530A;
+  --battu-text:          #E6EDF3;   /* near-white — primary values */
+  --battu-muted:         #8B949E;   /* medium gray — labels, secondary */
   --battu-accent:        #F59E0B;
   --battu-positive:      #86C232;
   --battu-negative:      #CC4444;
@@ -20,8 +21,8 @@
   --battu-cmd-bg:        #100D00;
   --battu-screen-bg:     #0D0A00;
   --battu-ticker-bg:     #0A0700;
-  --battu-label-color:   #B8820F;
-  --battu-value-color:   #F5CC60;
+  --battu-label-color:   #8B949E;   /* same as muted */
+  --battu-value-color:   #E6EDF3;   /* same as text */
   --battu-title-color:   #F59E0B;
   --battu-divider:       #1F1500;
   --battu-scrollbar:     #1F1500;
@@ -34,7 +35,31 @@ html, body, #root {
   height: 100%;
   background: var(--battu-bg);
   color: var(--battu-text);
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--battu-font);
+}
+
+/* Make all body text use JetBrains Mono */
+body, input, button {
+  font-family: var(--battu-font);
+}
+
+/* Numeric display — for prices and financial figures (tabular figures align) */
+.battu-num {
+  font-family: var(--battu-font);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Standard section header — use on ALL screens for consistent styling */
+.battu-section-header {
+  color: var(--battu-accent);
+  font-size: 9px;
+  letter-spacing: 3px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--battu-accent);
+  padding-left: 8px;
+  text-transform: uppercase;
 }
 
 /* Command bar placeholder */

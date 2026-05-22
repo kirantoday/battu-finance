@@ -71,10 +71,10 @@ export function DESStats({ profile }: Props) {
                 background: ri % 2 === 0 ? 'var(--battu-surface)' : 'var(--battu-bg)',
               }}
             >
-              <span style={{ color: 'var(--battu-text)', fontSize: '9px', letterSpacing: '1px' }}>
+              <span style={{ color: 'var(--battu-muted)', fontSize: '9px', letterSpacing: '1px' }}>
                 {cell.label}
               </span>
-              <span style={{ color: 'var(--battu-value-color)', fontSize: '11px', fontWeight: 'bold' }}>
+              <span style={{ color: 'var(--battu-value-color)', fontSize: '12px', fontWeight: 'bold' }}>
                 {cell.value}
               </span>
             </div>

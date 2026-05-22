@@ -15,7 +15,7 @@ function Row({ label, value, highlight }: {
       padding:             '5px 0',
       borderBottom:        '1px solid var(--battu-divider)',
     }}>
-      <span style={{ color: 'var(--battu-text)', fontSize: '10px' }}>{label}</span>
+      <span style={{ color: 'var(--battu-muted)', fontSize: '10px' }}>{label}</span>
       <span style={{
         color:      highlight ? 'var(--battu-accent)' : 'var(--battu-value-color)',
         fontSize:   '10px',
@@ -34,10 +34,11 @@ export function LEGALCounsel({ data }: Props) {
       <div style={{
         color:         'var(--battu-accent)',
         fontSize:      '9px',
-        letterSpacing: '2px',
+        letterSpacing: '3px',
         marginBottom:  '10px',
         borderLeft:    '3px solid var(--battu-accent)',
         paddingLeft:   '8px',
+        fontWeight:    600,
       }}>
         LEGAL COUNSEL
       </div>

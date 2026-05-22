@@ -432,6 +432,7 @@ export type NewsProviderName = 'newsapi' | 'benzinga'
 export type ThemeName = 'amber' | 'ice' | 'phosphor'
 
 export interface ThemeTokens {
+  font:         string
   bg:           string
   surface:      string
   border:       string
@@ -458,12 +459,13 @@ export const THEMES: Record<ThemeName, { label: string; tokens: ThemeTokens }> =
   amber: {
     label: 'Amber Terminal',
     tokens: {
+      font:         "'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
       bg:           '#0D0A00',
       surface:      '#130E00',
       border:       '#1F1500',
-      text:         '#F5CC60',
-      muted:        '#78530A',
-      accent:       '#F59E0B',
+      text:         '#E6EDF3',   // near-white — primary values
+      muted:        '#8B949E',   // medium gray — labels, secondary
+      accent:       '#F0B429',   // gold — only for key highlights
       positive:     '#86C232',
       negative:     '#CC4444',
       warning:      '#F59E0B',
@@ -472,8 +474,8 @@ export const THEMES: Record<ThemeName, { label: string; tokens: ThemeTokens }> =
       cmdBg:        '#100D00',
       screenBg:     '#0D0A00',
       tickerBg:     '#0A0700',
-      labelColor:   '#B8820F',
-      valueColor:   '#F5CC60',
+      labelColor:   '#8B949E',   // same as muted — labels recede
+      valueColor:   '#E6EDF3',   // same as text — values bright
       titleColor:   '#F59E0B',
       divider:      '#1F1500',
       scrollbar:    '#1F1500',
@@ -483,12 +485,13 @@ export const THEMES: Record<ThemeName, { label: string; tokens: ThemeTokens }> =
   ice: {
     label: 'Ice Blue',
     tokens: {
+      font:         "'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
       bg:           '#020B18',
       surface:      '#041020',
       border:       '#0A2030',
-      text:         '#E2E8F0',
-      muted:        '#1E5070',
-      accent:       '#38BDF8',
+      text:         '#E6EDF3',   // near-white — primary values
+      muted:        '#7B8FA6',   // blue-gray — labels, secondary
+      accent:       '#58A6FF',   // blue accent for ice
       positive:     '#34D399',
       negative:     '#F87171',
       warning:      '#FBBF24',
@@ -497,8 +500,8 @@ export const THEMES: Record<ThemeName, { label: string; tokens: ThemeTokens }> =
       cmdBg:        '#041020',
       screenBg:     '#020B18',
       tickerBg:     '#020B18',
-      labelColor:   '#4A90B8',
-      valueColor:   '#CBD5E1',
+      labelColor:   '#7B8FA6',   // same as muted — labels recede
+      valueColor:   '#E6EDF3',   // same as text — values bright
       titleColor:   '#38BDF8',
       divider:      '#0A2030',
       scrollbar:    '#0A2030',
@@ -508,12 +511,13 @@ export const THEMES: Record<ThemeName, { label: string; tokens: ThemeTokens }> =
   phosphor: {
     label: 'Green Phosphor',
     tokens: {
+      font:         "'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
       bg:           '#010801',
       surface:      '#010A01',
       border:       '#003300',
-      text:         '#00CC33',
-      muted:        '#005520',
-      accent:       '#00FF41',
+      text:         '#AAFFAA',   // bright phosphor green — primary values
+      muted:        '#4D9950',   // medium green — labels, secondary
+      accent:       '#00FF41',   // pure phosphor green
       positive:     '#00FF41',
       negative:     '#FF4444',
       warning:      '#FFCC00',
@@ -522,8 +526,8 @@ export const THEMES: Record<ThemeName, { label: string; tokens: ThemeTokens }> =
       cmdBg:        '#010A01',
       screenBg:     '#010801',
       tickerBg:     '#010801',
-      labelColor:   '#009922',
-      valueColor:   '#00AA2A',
+      labelColor:   '#4D9950',   // same as muted — labels recede
+      valueColor:   '#AAFFAA',   // same as text — values bright
       titleColor:   '#00FF41',
       divider:      '#003300',
       scrollbar:    '#002200',

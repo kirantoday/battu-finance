@@ -57,10 +57,17 @@ export function DESHeader({ profile }: Props) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginTop: '8px' }}>
-        <span style={{ color: 'var(--battu-text)', fontSize: '28px', fontWeight: 'bold' }}>
+        <span style={{
+          color:              pos ? 'var(--battu-positive)' : 'var(--battu-negative)',
+          fontSize:           '42px',
+          fontWeight:         '800',
+          letterSpacing:      '-1px',
+          lineHeight:         '1',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
           {dollarSign}{profile.price.toFixed(2)}
         </span>
-        <span style={{ color: changeColor, fontSize: '14px' }}>
+        <span style={{ color: changeColor, fontSize: '16px', fontWeight: '600' }}>
           {arrow} {Math.abs(profile.change).toFixed(2)} ({pos ? '+' : ''}{profile.changePct.toFixed(2)}%)
         </span>
         <span style={{ color: 'var(--battu-muted)', fontSize: '11px', marginLeft: 'auto' }}>

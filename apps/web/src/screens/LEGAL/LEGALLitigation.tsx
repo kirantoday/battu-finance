@@ -24,10 +24,11 @@ export function LEGALLitigation({ data }: Props) {
       <div style={{
         color:         'var(--battu-accent)',
         fontSize:      '9px',
-        letterSpacing: '2px',
+        letterSpacing: '3px',
         marginBottom:  '10px',
         borderLeft:    '3px solid var(--battu-accent)',
         paddingLeft:   '8px',
+        fontWeight:    600,
       }}>
         LITIGATION &amp; REGULATORY
       </div>
@@ -35,7 +36,7 @@ export function LEGALLitigation({ data }: Props) {
 
         {/* Active Proceedings count */}
         <div style={ROW_STYLE}>
-          <span style={{ color: 'var(--battu-text)', fontSize: '10px' }}>Active Proceedings</span>
+          <span style={{ color: 'var(--battu-muted)', fontSize: '10px' }}>Active Proceedings</span>
           <span style={{
             color:      countColor,
             fontSize:   '10px',
@@ -65,7 +66,7 @@ export function LEGALLitigation({ data }: Props) {
 
         {/* SEC Investigation */}
         <div style={ROW_STYLE}>
-          <span style={{ color: 'var(--battu-text)', fontSize: '10px' }}>SEC Investigation</span>
+          <span style={{ color: 'var(--battu-muted)', fontSize: '10px' }}>SEC Investigation</span>
           <span style={{
             color:      hasSEC ? 'var(--battu-negative)' : 'var(--battu-positive)',
             fontSize:   '10px',
@@ -79,7 +80,7 @@ export function LEGALLitigation({ data }: Props) {
         {/* Regulatory proceedings (free-text) */}
         {data.regulatoryProceedings && (
           <div style={ROW_STYLE}>
-            <span style={{ color: 'var(--battu-text)', fontSize: '10px' }}>Regulatory</span>
+            <span style={{ color: 'var(--battu-muted)', fontSize: '10px' }}>Regulatory</span>
             <span style={{
               color:      'var(--battu-muted)',
               fontSize:   '10px',
@@ -96,10 +97,11 @@ export function LEGALLitigation({ data }: Props) {
             <div style={{
               color:         'var(--battu-accent)',
               fontSize:      '9px',
-              letterSpacing: '2px',
+              letterSpacing: '3px',
               margin:        '10px 0 6px',
               borderLeft:    '3px solid var(--battu-accent)',
               paddingLeft:   '8px',
+              fontWeight:    600,
             }}>
               FDA / REGULATORY STATUS
             </div>
@@ -109,7 +111,7 @@ export function LEGALLitigation({ data }: Props) {
               { label: 'Last Date',   value: data.fdaLastDate   },
             ].map(({ label, value }) => value && (
               <div key={label} style={ROW_STYLE}>
-                <span style={{ color: 'var(--battu-text)', fontSize: '10px' }}>{label}</span>
+                <span style={{ color: 'var(--battu-muted)', fontSize: '10px' }}>{label}</span>
                 <span style={{
                   color:      'var(--battu-value-color)',
                   fontSize:   '10px',

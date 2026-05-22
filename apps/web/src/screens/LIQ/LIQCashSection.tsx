@@ -37,11 +37,11 @@ export function LIQCashSection({ data }: Props) {
       <div style={{
         color:         'var(--battu-accent)',
         fontSize:      '9px',
-        letterSpacing: '2px',
+        letterSpacing: '3px',
         marginBottom:  '8px',
         borderLeft:    '3px solid var(--battu-accent)',
         paddingLeft:   '8px',
-        fontWeight:    'bold',
+        fontWeight:    600,
       }}>
         CASH POSITION
       </div>
@@ -54,7 +54,7 @@ export function LIQCashSection({ data }: Props) {
             padding:             '4px 0',
             borderBottom:        '1px solid var(--battu-divider)',
           }}>
-            <span style={{ color: 'var(--battu-text)', fontSize: '10px', fontWeight: bold ? 'bold' : 'normal' }}>
+            <span style={{ color: 'var(--battu-muted)', fontSize: '10px', fontWeight: bold ? 'bold' : 'normal' }}>
               {label}
             </span>
             <span style={{ color, fontSize: '11px', fontWeight: bold ? 'bold' : 'normal', fontFamily: 'JetBrains Mono, monospace' }}>

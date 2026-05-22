@@ -114,11 +114,12 @@ export function WLTable({ quotes, flashing, onTickerClick, onRemove }: Props) {
                 </td>
 
                 <td style={{
-                  padding:    '8px 12px',
-                  color:      'var(--battu-text)',
-                  fontWeight: 'bold',
-                  textAlign:  'right',
-                  fontSize:   '12px',
+                  padding:            '8px 12px',
+                  color,
+                  fontWeight:         'bold',
+                  textAlign:          'right',
+                  fontSize:           '13px',
+                  fontVariantNumeric: 'tabular-nums',
                 }}>
                   {fmtPrice(q.price)}
                 </td>

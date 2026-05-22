@@ -47,10 +47,15 @@ export function GPHeader({ ticker, quote, timeframe }: Props) {
 
       {quote && (
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ color: 'var(--battu-text)', fontSize: '16px', fontWeight: 'bold' }}>
+          <span style={{
+            color:              pos ? 'var(--battu-positive)' : 'var(--battu-negative)',
+            fontSize:           '22px',
+            fontWeight:         '800',
+            fontVariantNumeric: 'tabular-nums',
+          }}>
             ${quote.price.toFixed(2)}
           </span>
-          <span style={{ color: changeColor, fontSize: '12px' }}>
+          <span style={{ color: changeColor, fontSize: '13px', fontWeight: '600' }}>
             {arrow} {Math.abs(quote.change).toFixed(2)} ({pos ? '+' : ''}{quote.changePct.toFixed(2)}%)
           </span>
         </div>
