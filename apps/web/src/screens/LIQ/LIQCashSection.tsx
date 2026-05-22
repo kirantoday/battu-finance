@@ -4,7 +4,12 @@ interface Props { data: LIQData }
 
 function fmtB(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return '—'
-  return `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(3)}B`
+  const sign = v < 0 ? '-' : ''
+  const abs  = Math.abs(v)
+  // Values are stored in billions. Show $X.XXXB at or above $1B; under that,
+  // promote to millions ($XX.XM) so a $60M facility doesn't read as $0.060B.
+  if (abs >= 1) return `${sign}$${abs.toFixed(3)}B`
+  return `${sign}$${(abs * 1000).toFixed(1)}M`
 }
 
 function fmtQtrs(v: number | null): string {

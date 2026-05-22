@@ -2,6 +2,16 @@ import type { LIQData } from '@battu/shared'
 
 interface Props { data: LIQData }
 
+function fmtB(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  const sign = v < 0 ? '-' : ''
+  const abs  = Math.abs(v)
+  // Values are stored in billions. Show $X.XXXB at or above $1B; under that,
+  // promote to millions ($XX.XM) so a $60M facility doesn't read as $0.060B.
+  if (abs >= 1) return `${sign}$${abs.toFixed(3)}B`
+  return `${sign}$${(abs * 1000).toFixed(1)}M`
+}
+
 export function LIQSources({ data }: Props) {
   const sources = data.sources || {}
   const links: Array<{ label: string; url: string }> = []
@@ -34,7 +44,7 @@ export function LIQSources({ data }: Props) {
             TOTAL LIQUIDITY
           </span>
           <span style={{ color: 'var(--battu-accent)', fontSize: '18px', fontWeight: 'bold', fontFamily: 'JetBrains Mono, monospace' }}>
-            ${totalB.toFixed(3)}B
+            {fmtB(totalB)}
           </span>
         </div>
       )}
