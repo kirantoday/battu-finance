@@ -63,8 +63,37 @@ async function extractLenderInfo(
 
   function lenderWindow(text: string): string {
     const lower = text.toLowerCase()
-    // 'banking facilities' / 'overdraft' are IFRS-flavoured terms common in 20-F/40-F
-    for (const marker of ['administrative agent', 'credit agreement, dated', 'banking facilities', 'banking facility', 'overdraft facility']) {
+    // Markers in priority order:
+    //   - US corporate idiom (10-K)
+    //   - IFRS / European bank-facility idiom (20-F / 40-F)
+    //   - Maritime / shipping idiom (20-F filers like TORO, where credit
+    //     agreements are syndicated and use "facility agent" instead of
+    //     "administrative agent", plus named shipping lenders).
+    const markers = [
+      'administrative agent',
+      'credit agreement, dated',
+      'banking facilities',
+      'banking facility',
+      'overdraft facility',
+      // Maritime / shipping idioms
+      'facility agent',
+      'credit facility agent',
+      'syndicate of banks',
+      'mandated lead arranger',
+      'term loan facility',
+      'shipping credit',
+      'senior secured',
+      'agent bank',
+      // Major shipping lenders by name — when the agreement names them
+      // directly in prose the ±2K window centres on the bank itself.
+      'dnb',
+      'abn amro',
+      'nordea',
+      'credit agricole',
+      'hamburg commercial',
+      'piraeus bank',
+    ]
+    for (const marker of markers) {
       const i = lower.indexOf(marker)
       if (i >= 0) {
         const start = Math.max(0, i - 1000)
@@ -115,6 +144,19 @@ LENDER-EXTRACTION RULES:
 - Strip "N.A.", "LLC", "Bank" suffixes — return just the firm name.
 - If amounts are in another currency (CAD, EUR, etc.), still return the number
   as stated (do not convert) and prefix the currency in facilityType.
+
+IMPORTANT FOR SHIPPING / MARITIME COMPANIES (20-F filers like tanker, dry-bulk,
+container, LNG operators):
+- Maritime credit facilities use "facility agent" or "credit facility agent"
+  instead of "administrative agent". Treat these as equivalent.
+- Shipping loans are typically syndicated — phrases like "syndicate of banks"
+  or "mandated lead arranger" indicate multiple lenders. When this is the
+  case, return the LEAD ARRANGER or FACILITY AGENT as facilityLender.
+- Major shipping lenders include: DNB Bank, ABN AMRO, Nordea, Credit Agricole,
+  Hamburg Commercial Bank, Piraeus Bank, ING, Citi, Société Générale.
+  When any of these are named in a credit agreement context, that is the lender.
+- Shipping facilities are often described as "term loan facility" or
+  "senior secured term loan" — capture the amount stated.
 
 If no credit facility found, set hasCreditFacility: false and others null.
 
