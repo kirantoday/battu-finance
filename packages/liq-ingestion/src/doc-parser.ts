@@ -41,6 +41,9 @@ const SECTION_PATTERNS_10K: Array<{
   { pattern: /ITEM\s+7[\s.]+MANAGEMENT.{1,30}DISCUSSION/i,  key: 'item_7_mda',        label: 'Item 7 — MD&A',                 type: 'item', num: '7'  },
   { pattern: /ITEM\s+8[\s.]+FINANCIAL\s+STATEMENTS/i,       key: 'item_8_financials', label: 'Item 8 — Financial Statements', type: 'item', num: '8'  },
   { pattern: /ITEM\s+9A[\s.]+CONTROLS/i,                    key: 'item_9a_controls',  label: 'Item 9A — Controls',            type: 'item', num: '9A' },
+  // Auditor's report letter — header lives inside Item 8 but is the actual
+  // section where the auditor firm's name appears (with a signature block).
+  { pattern: /REPORT\s+OF\s+INDEPENDENT\s+REGISTERED/i,      key: 'auditor_report',    label: 'Report of Independent Registered Public Accounting Firm', type: 'item', num: 'AUDIT' },
 ]
 
 function stripHtml(html: string): string {

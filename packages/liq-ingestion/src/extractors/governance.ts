@@ -47,14 +47,25 @@ export async function extractAndStoreGovernance(
         'legal counsel law firm LLP attorneys opinion validity Ropes Gray Sullivan Cromwell Davis Polk Skadden Wachtell Cooley Latham Watkins',
         8,
       ).catch(() => []),
-      // Auditor: include Big-4 firm names because BIIB's 10-K may use the
-      // long form "independent registered public accounting firm" without the
-      // shorter word "auditor".
-      hybridSearch(
-        ticker, '10-K',
-        'independent registered public accounting firm auditor report opinion PricewaterhouseCoopers Deloitte KPMG Ernst Young PCAOB',
-        8,
-      ).catch(() => []),
+      // Auditor: 10-K's auditor report often only shows a PCAOB ID, with the
+      // actual firm name appearing in the S-3 "EXPERTS" section
+      // ("incorporated in reliance on the report of [Firm], independent
+      // registered public accounting firm"). Search both filing types.
+      Promise.all([
+        hybridSearch(
+          ticker, '10-K',
+          'independent registered public accounting firm auditor report opinion PricewaterhouseCoopers Deloitte KPMG Ernst Young PCAOB',
+          8,
+        ).catch(() => []),
+        hybridSearch(
+          ticker, 'S-3',
+          'experts auditor independent registered public accounting firm PricewaterhouseCoopers Deloitte KPMG Ernst Young',
+          5,
+        ).catch(() => []),
+        // S-3 first — the EXPERTS section in S-3s reliably names the auditor
+        // ("incorporated in reliance on the report of [Firm]"). The 10-K's
+        // own auditor report often shows only a PCAOB ID after HTML stripping.
+      ]).then(([tenK, s3]) => [...s3, ...tenK]),
       hybridSearch(ticker, '10-K', 'legal proceedings lawsuits pending claims material litigation contingencies',  5).catch(() => []),
       hybridSearch(ticker, '10-K', 'going concern substantial doubt ability to continue operations', 3).catch(() => []),
     ])
@@ -79,16 +90,41 @@ Text: ${ctx}`,
   let auditOpinionClean   = true
   let hasGoingConcern     = false
 
-  if (auditorChunks.length > 0) {
-    const ctx = auditorChunks.map(c => c.chunkText).join('\n\n').slice(0, 4000)
+  // Fallback: if the standard query returned nothing useful, search for any
+  // chunk that mentions a major auditing firm by name. This catches cases
+  // where Item 8 wasn't detected and the auditor signature block landed in a
+  // mis-labeled chunk.
+  let effectiveAuditorChunks = auditorChunks
+  if (effectiveAuditorChunks.length === 0) {
+    effectiveAuditorChunks = await hybridSearch(
+      ticker, '10-K',
+      'PricewaterhouseCoopers Deloitte KPMG Ernst Young Grant Thornton BDO',
+      8,
+    ).catch(() => [])
+  }
+
+  if (effectiveAuditorChunks.length > 0) {
+    // 8K char window — needs enough room for multiple chunks since the actual
+    // PwC mention can be deep inside the S-3 EXPERTS chunk.
+    const ctx = effectiveAuditorChunks.map(c => c.chunkText).join('\n\n').slice(0, 8000)
     const r = await claudeHaikuExtract<{
       auditorName:  string | null
       auditorSince: string | null
       opinionClean: boolean
     }>(
-      `Extract auditor details from this 10-K for ${ticker}.
+      `Extract the company's independent auditor from this 10-K excerpt for ${ticker}.
+
+The auditor name is a major accounting firm like PricewaterhouseCoopers (PwC),
+Deloitte, KPMG, Ernst & Young (EY), Grant Thornton, or BDO. Look for phrases
+like "signed by [firm]" or "/s/ [firm name]" at the end of the audit report.
+If you see "PCAOB ID No." it's near the auditor signature.
+
 Return ONLY JSON: {"auditorName":string|null,"auditorSince":string|null,"opinionClean":boolean}
-Text: ${ctx}`,
+- Strip "LLP", "LLC", "P.C." suffixes — return e.g. "PricewaterhouseCoopers" not "PricewaterhouseCoopers LLP".
+- opinionClean is true unless the report uses words like "adverse", "qualified", or "disclaimer of opinion".
+
+Text:
+${ctx}`,
     )
     auditorName       = r?.auditorName ?? null
     auditorSince      = r?.auditorSince ?? null
