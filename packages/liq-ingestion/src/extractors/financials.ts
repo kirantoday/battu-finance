@@ -29,17 +29,33 @@ interface CreditFacilityResult {
   facilityCovenants: string | null
 }
 
-async function extractCreditFacilityFromChunks(
+async function claudeHaikuJson<T>(prompt: string): Promise<T | null> {
+  try {
+    const res = await anthropicClient().messages.create({
+      model:      'claude-haiku-4-5',
+      max_tokens: 500,
+      messages:   [{ role: 'user', content: prompt }],
+    })
+    const text  = res.content[0]?.type === 'text' ? res.content[0].text : ''
+    const clean = text.replace(/```json|```/g, '').trim()
+    const match = clean.match(/\{[\s\S]*\}/)
+    return JSON.parse(match ? match[0] : clean) as T
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Pass 1 — lender focused. Uses ±2K windows around "administrative agent" /
+ * "credit agreement, dated" markers so the lender mention (often deep in a
+ * 16K-char chunk's exhibits list) always lands in Claude's prompt.
+ */
+async function extractLenderInfo(
   chunks: Array<{ chunkText: string; section: string }>,
   ticker: string,
-): Promise<CreditFacilityResult | null> {
+): Promise<Pick<CreditFacilityResult, 'hasCreditFacility' | 'facilityLender' | 'facilityType' | 'facilityTotal'> | null> {
   if (chunks.length === 0) return null
 
-  // The lender name typically lives near "Administrative Agent" or "Credit
-  // Agreement, dated" in the exhibits list. These markers may be in the
-  // MIDDLE of a 16K chunk — past the truncation if we just join + slice.
-  // Pre-extract the ±2K window around the first marker hit per chunk so the
-  // critical text always lands in the Claude prompt.
   function lenderWindow(text: string): string {
     const lower = text.toLowerCase()
     for (const marker of ['administrative agent', 'credit agreement, dated']) {
@@ -53,51 +69,82 @@ async function extractCreditFacilityFromChunks(
     return text.slice(0, 3000)
   }
 
-  const windows = chunks.map(c => lenderWindow(c.chunkText))
-  const context = windows.join('\n\n---\n\n').slice(0, 12000)
+  const context = chunks
+    .map(c => lenderWindow(c.chunkText))
+    .join('\n\n---\n\n')
+    .slice(0, 12000)
 
-  const res = await anthropicClient().messages.create({
-    model:      'claude-sonnet-4-5',
-    max_tokens: 800,
-    messages: [{
-      role:    'user',
-      content: `Extract credit facility details for ${ticker} from these 10-K excerpts.
+  return claudeHaikuJson<{
+    hasCreditFacility: boolean
+    facilityLender:    string | null
+    facilityType:      string | null
+    facilityTotal:     number | null
+  }>(
+    `Extract LENDER info for ${ticker}'s primary revolving credit facility from these 10-K excerpts.
 Return ONLY valid JSON, no other text:
 {
   "hasCreditFacility": boolean,
-  "facilityType": "<string: e.g. 'Senior unsecured revolving credit facility'>" | null,
-  "facilityTotal":   "<number in DOLLARS, e.g. 1500000000 for $1.5B>" | null,
-  "facilityDrawn":   "<number in DOLLARS>" | null,
-  "facilityUndrawn": "<number in DOLLARS>" | null,
-  "facilityLender":  "<The bank or financial institution name (e.g. Bank of America, JPMorgan Chase, Wells Fargo, Citibank, Goldman Sachs, Morgan Stanley). Look for 'Administrative Agent' or 'as agent' — the bank named as Administrative Agent IS the lender>" | null,
-  "facilityRate":    "<string: e.g. 'SOFR + 1.5%'>" | null,
-  "facilityExpiry":  "YYYY-MM-DD" | null,
-  "facilitySecured": boolean | null,
-  "facilityCovenants": "<short description>" | null
+  "facilityLender":    "<bank name, e.g. 'Bank of America'>" | null,
+  "facilityType":      "<string, e.g. 'Senior unsecured revolving credit facility'>" | null,
+  "facilityTotal":     "<number in DOLLARS, e.g. 1500000000 for $1.5B>" | null
 }
 
-IMPORTANT lender-extraction rules:
+LENDER-EXTRACTION RULES:
 - The lender is typically named as "Administrative Agent" in credit agreements.
-- Example: "Bank of America, N.A., as Administrative Agent" means facilityLender = "Bank of America".
-- "JPMorgan Chase Bank, N.A., as administrative agent" means facilityLender = "JPMorgan Chase".
-- If multiple banks are listed as a syndicate, return the Administrative Agent (the lead bank).
-- Strip "N.A.", "LLC", and similar suffixes — return just the bank name.
+- "Bank of America, N.A., as Administrative Agent"  → facilityLender: "Bank of America".
+- "JPMorgan Chase Bank, N.A., as administrative agent" → facilityLender: "JPMorgan Chase".
+- If multiple agreements exist, return the LENDER for the MOST RECENT one (later date wins).
+- Strip "N.A.", "LLC", "Bank" suffixes — return just the firm name.
 
-If no credit facility found, set hasCreditFacility: false and all others null.
+If no credit facility found, set hasCreditFacility: false and others null.
 
 Excerpts:
 ${context}`,
-    }],
-  })
+  )
+}
 
-  try {
-    const text  = res.content[0]?.type === 'text' ? res.content[0].text : ''
-    const clean = text.replace(/```json|```/g, '').trim()
-    const match = clean.match(/\{[\s\S]*\}/)
-    return JSON.parse(match ? match[0] : clean) as CreditFacilityResult
-  } catch {
-    return null
-  }
+/**
+ * Pass 2 — terms focused. Uses the raw chunk text (no lender-window prefilter)
+ * so MD&A and Notes to Financial Statements language about maturity, undrawn
+ * capacity, security, and covenants stays in context.
+ */
+async function extractTermsInfo(
+  chunks: Array<{ chunkText: string; section: string }>,
+  ticker: string,
+): Promise<Pick<CreditFacilityResult,
+  'facilityDrawn' | 'facilityUndrawn' | 'facilityExpiry' | 'facilitySecured' | 'facilityRate' | 'facilityCovenants'
+> | null> {
+  if (chunks.length === 0) return null
+
+  const context = chunks.map(c => c.chunkText).join('\n\n---\n\n').slice(0, 8000)
+
+  return claudeHaikuJson<{
+    facilityDrawn:      number | null
+    facilityUndrawn:    number | null
+    facilityExpiry:     string | null
+    facilitySecured:    boolean | null
+    facilityRate:       string | null
+    facilityCovenants:  string | null
+  }>(
+    `Extract TERMS of ${ticker}'s primary revolving credit facility from these 10-K excerpts.
+Return ONLY valid JSON, no other text:
+{
+  "facilityDrawn":     "<number in DOLLARS — current balance outstanding>" | null,
+  "facilityUndrawn":   "<number in DOLLARS — available capacity>" | null,
+  "facilityExpiry":    "YYYY-MM-DD" | null,
+  "facilitySecured":   boolean | null,
+  "facilityRate":      "<string, e.g. 'SOFR + 1.25%'>" | null,
+  "facilityCovenants": "<one-sentence description>" | null
+}
+
+NOTES:
+- If the filing says "no amounts were outstanding" or "no borrowings", facilityDrawn = 0 and facilityUndrawn = full facility size.
+- For expiry, use the maturity date stated in the Credit Agreement.
+- "Unsecured" → facilitySecured: false. "Secured" → true.
+
+Excerpts:
+${context}`,
+  )
 }
 
 export async function extractAndStoreFinancials(
@@ -136,20 +183,53 @@ export async function extractAndStoreFinancials(
     missing.push('cash_data')
   }
 
-  // ── Credit facility via RAG ──
+  // ── Credit facility via RAG — TWO PASSES ──
+  // Pass 1 retrieves chunks that name the lender (BoA / JPM / etc) and the
+  // facility size. Pass 2 retrieves chunks about maturity, undrawn capacity,
+  // covenants. Lender-window prefiltering compresses pass-1 context around
+  // "administrative agent" so the bank name always lands in the prompt; pass-2
+  // uses the raw chunk text so terms language isn't accidentally truncated.
   let cf: CreditFacilityResult | null = null
   try {
-    // Query includes "Administrative Agent" + common syndicate-lead bank names
-    // so BM25 fires on the chunk that names the lender, not just the abstract
-    // credit-facility prose.
-    const chunks = await hybridSearch(
-      ticker,
-      '10-K',
-      'revolving credit facility administrative agent bank lender SOFR maturity undrawn available line of credit Bank of America JPMorgan Chase Wells Fargo Citibank Goldman Sachs Morgan Stanley',
-      8,
-    )
-    if (chunks.length > 0) {
-      cf = await extractCreditFacilityFromChunks(chunks, ticker)
+    const [lenderChunks, termsChunks] = await Promise.all([
+      hybridSearch(
+        ticker, '10-K',
+        'revolving credit facility administrative agent bank lender Bank of America JPMorgan Chase Wells Fargo Citibank Goldman Sachs Morgan Stanley',
+        8,
+      ),
+      hybridSearch(
+        ticker, '10-K',
+        'undrawn available maturity expiry date covenant SOFR interest rate secured unsecured outstanding borrowings',
+        8,
+      ),
+    ])
+
+    const [lenderInfo, termsInfo] = await Promise.all([
+      extractLenderInfo(lenderChunks, ticker),
+      extractTermsInfo(termsChunks,  ticker),
+    ])
+
+    if (lenderInfo || termsInfo) {
+      const drawn   = termsInfo?.facilityDrawn   ?? null
+      const undrawn = termsInfo?.facilityUndrawn ?? null
+      // If pass 1 missed the headline total, derive it from drawn + undrawn
+      // (works when the filing reports both, which is the common case).
+      const derivedTotal =
+           lenderInfo?.facilityTotal
+        ?? (drawn != null && undrawn != null ? drawn + undrawn : null)
+
+      cf = {
+        hasCreditFacility: lenderInfo?.hasCreditFacility ?? (termsInfo != null),
+        facilityLender:    lenderInfo?.facilityLender   ?? null,
+        facilityType:      lenderInfo?.facilityType     ?? null,
+        facilityTotal:     derivedTotal,
+        facilityDrawn:     drawn,
+        facilityUndrawn:   undrawn,
+        facilityExpiry:    termsInfo?.facilityExpiry    ?? null,
+        facilitySecured:   termsInfo?.facilitySecured   ?? null,
+        facilityRate:      termsInfo?.facilityRate      ?? null,
+        facilityCovenants: termsInfo?.facilityCovenants ?? null,
+      }
     }
   } catch (e) {
     console.log(`  [financials] Credit facility extraction failed: ${(e as Error).message}`)
