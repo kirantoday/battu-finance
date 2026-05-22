@@ -14,6 +14,7 @@ console.log('  NEWS_PROVIDER:     ', process.env.NEWS_PROVIDER      || 'newsapi 
 console.log('  NEWSAPI_KEY:       ', process.env.NEWSAPI_KEY        ? '✓' : '✗ MISSING')
 console.log('  BENZINGA_API_KEY:  ', process.env.BENZINGA_API_KEY   ? '✓' : '✗ MISSING')
 console.log('  ANTHROPIC_API_KEY: ', process.env.ANTHROPIC_API_KEY  ? '✓' : '✗ MISSING')
+console.log('  VOYAGE_API_KEY:    ', process.env.VOYAGE_API_KEY     ? '✓' : '✗ MISSING')
 console.log('  DATABASE_URL:      ', process.env.DATABASE_URL       ? '✓' : '✗ MISSING')
 console.log('  SUPABASE_URL:      ', process.env.SUPABASE_URL       ? '✓' : '✗ MISSING')
 console.log('═══════════════════════════════════')
