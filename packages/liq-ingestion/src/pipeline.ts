@@ -22,9 +22,16 @@ export interface PipelineResult {
 }
 
 const FILING_TYPE_QUERIES: Array<{ label: string; forms: string[] }> = [
-  { label: '10-K', forms: ['10-K'] },
-  // S-3 query also picks up S-3/A and S-3ASR — the actual form filed is stored.
-  { label: 'S-3',  forms: ['S-3', 'S-3/A', 'S-3ASR'] },
+  // Annual report — covers all three issuer types:
+  //   10-K  — US domestic issuers
+  //   20-F  — foreign private issuers (e.g. Greek shipping, EU tech)
+  //   40-F  — Canadian issuers under the Multi-Jurisdictional Disclosure System (MJDS)
+  { label: '10-K', forms: ['10-K', '20-F', '40-F'] },
+  // Shelf registrations:
+  //   S-3   — US domestic shelf
+  //   F-3   — foreign private issuer shelf
+  //   F-10  — Canadian MJDS shelf
+  { label: 'S-3',  forms: ['S-3', 'S-3/A', 'S-3ASR', 'F-3', 'F-3/A', 'F-3ASR', 'F-10', 'F-10/A'] },
 ]
 
 export async function processTicker(ticker: string): Promise<PipelineResult> {
@@ -112,11 +119,17 @@ export async function processTicker(ticker: string): Promise<PipelineResult> {
 
     // Now that chunks are stored, run all three extractors in parallel.
     console.log(`  Running extractions...`)
-    await Promise.allSettled([
+    const settled = await Promise.allSettled([
       extractAndStoreFinancials(ticker, cik),
       extractAndStoreCapital(ticker, cik),
       extractAndStoreGovernance(ticker, cik),
     ])
+    const labels = ['financials', 'capital', 'governance']
+    settled.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.warn(`  [${labels[i]}] ✗ ${ticker} extractor crashed: ${(r.reason as Error)?.message ?? r.reason}`)
+      }
+    })
 
     console.log(`[pipeline] ✓ ${ticker} complete (${totalChunks} chunks)`)
     return { ticker, success: true, chunks: totalChunks }

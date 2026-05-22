@@ -13,6 +13,19 @@ const BATCH_SIZE    = parseInt(process.env.VOYAGE_BATCH_SIZE     ?? '32',  10)
 const RATE_LIMIT_MS = parseInt(process.env.VOYAGE_RATE_LIMIT_MS  ?? '150', 10)
 const MAX_RETRIES   = parseInt(process.env.VOYAGE_RETRIES        ?? '3',   10)
 
+// Voyage's API hard-caps a single embeddings request at 120K tokens.
+// We pack to 100K to leave headroom for tokenizer variance (our char/4
+// heuristic underestimates token count for dense financial text like
+// tables, footnotes, and ticker-heavy passages).
+const MAX_BATCH_TOKENS = 100_000
+
+// Rough token estimate. Voyage uses a BPE tokenizer similar to OpenAI's —
+// ~4 chars/token for English prose, less for tables/numbers. We deliberately
+// round down (chars/3.5) to over-estimate tokens and stay safely under cap.
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3.5)
+}
+
 let lastCallTime = 0
 
 async function rateLimitedCall<T>(fn: () => Promise<T>): Promise<T> {
@@ -67,12 +80,34 @@ async function voyageEmbed(
 
 export async function embedDocuments(texts: string[]): Promise<number[][]> {
   const results: number[][] = []
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batch = texts.slice(i, i + BATCH_SIZE)
+  let i = 0
+  while (i < texts.length) {
+    // Build the next batch: take up to BATCH_SIZE chunks, but cut early if
+    // the cumulative token estimate would exceed MAX_BATCH_TOKENS. This
+    // prevents large 10-Ks (e.g. STI at 162K tokens in 32 chunks) from
+    // tripping Voyage's 120K-tokens-per-request cap.
+    const batch: string[] = []
+    let tokens = 0
+    while (
+      i + batch.length < texts.length
+      && batch.length < BATCH_SIZE
+    ) {
+      const next     = texts[i + batch.length]
+      const nextTok  = estimateTokens(next)
+      // Always include at least one chunk per batch, even if it alone
+      // exceeds the cap — the API will reject it, but truncating chunks
+      // is a separate concern handled upstream.
+      if (batch.length > 0 && tokens + nextTok > MAX_BATCH_TOKENS) break
+      batch.push(next)
+      tokens += nextTok
+    }
+
     const embeddings = await rateLimitedCall(() => voyageEmbed(batch, 'document'))
     results.push(...embeddings)
-    if (i + BATCH_SIZE < texts.length) {
-      console.log(`  Embedded ${Math.min(i + BATCH_SIZE, texts.length)}/${texts.length} chunks`)
+    i += batch.length
+
+    if (i < texts.length) {
+      console.log(`  Embedded ${i}/${texts.length} chunks (${tokens.toLocaleString()} tok in batch)`)
     }
   }
   return results

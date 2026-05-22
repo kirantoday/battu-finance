@@ -106,11 +106,13 @@ export async function isFilingProcessed(
 
 /**
  * Resolve a logical filingType into the actual `filing_type` values stored
- * in battu.doc_chunks. 'S-3' is treated as a family covering S-3, S-3/A and
- * S-3ASR — rows store the actual form filed.
+ * in battu.doc_chunks. Each family covers domestic + foreign equivalents:
+ *   '10-K' family: US 10-K + foreign 20-F + Canadian MJDS 40-F
+ *   'S-3'  family: US S-3 + foreign F-3 + Canadian MJDS F-10
  */
 function filingTypeFamily(filingType: string): string[] {
-  if (filingType === 'S-3') return ['S-3', 'S-3/A', 'S-3ASR']
+  if (filingType === '10-K') return ['10-K', '20-F', '40-F']
+  if (filingType === 'S-3')  return ['S-3', 'S-3/A', 'S-3ASR', 'F-3', 'F-3/A', 'F-3ASR', 'F-10', 'F-10/A']
   return [filingType]
 }
 

@@ -20,6 +20,24 @@ function anthropicClient(): Anthropic {
   return _client
 }
 
+/** Retry on transient Anthropic errors (529 overloaded, 5xx, network). */
+async function anthropicWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let attempt = 0
+  while (true) {
+    try {
+      return await fn()
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e)
+      const isTransient = /529|overloaded|503|504|ECONNRESET|ETIMEDOUT/i.test(msg)
+      if (!isTransient || attempt >= maxRetries) throw e
+      const waitMs = 5_000 * Math.pow(2, attempt)   // 5s, 10s, 20s
+      console.warn(`  [capital] Anthropic transient error — retry ${attempt + 1}/${maxRetries} after ${waitMs / 1000}s: ${msg.slice(0, 80)}`)
+      await new Promise(r => setTimeout(r, waitMs))
+      attempt++
+    }
+  }
+}
+
 export async function extractAndStoreCapital(
   ticker: string,
   cik:    string,
@@ -27,8 +45,12 @@ export async function extractAndStoreCapital(
   console.log(`  [capital] Extracting for ${ticker}...`)
   const missing: string[] = []
 
-  // ── Locate latest S-3 ──
-  const shelfFilings = await getFilingsList(cik, ['S-3', 'S-3/A', 'S-3ASR'])
+  // ── Locate latest shelf — covers US (S-3), foreign (F-3), and Canadian MJDS (F-10) ──
+  const shelfFilings = await getFilingsList(cik, [
+    'S-3', 'S-3/A', 'S-3ASR',
+    'F-3', 'F-3/A', 'F-3ASR',
+    'F-10', 'F-10/A',
+  ])
 
   let hasShelf        = false
   let isWksi          = false
@@ -44,7 +66,7 @@ export async function extractAndStoreCapital(
   if (shelfFilings.length > 0) {
     const latest    = shelfFilings[0]
     hasShelf        = true
-    isWksi          = latest.form === 'S-3ASR'
+    isWksi          = latest.form === 'S-3ASR' || latest.form === 'F-3ASR'
     shelfFilingDate = latest.filingDate
     sourceS3        = buildFilingUrl(cik, latest.accessionNumber, latest.primaryDocument)
 
@@ -58,35 +80,42 @@ export async function extractAndStoreCapital(
       )
       if (chunks.length > 0) {
         const context = chunks.map(c => c.chunkText).join('\n\n').slice(0, 6000)
-        const res = await anthropicClient().messages.create({
-          model:      'claude-haiku-4-5',
-          max_tokens: 400,
-          messages: [{
-            role:    'user',
-            content: `Extract shelf registration details from this S-3 for ${ticker}.
+        // Wrap the whole Claude block so a 529 (or other API failure) leaves
+        // the EDGAR-derived fields (has_shelf, is_wksi, dates, source URL)
+        // intact and the row still gets inserted.
+        try {
+          const res = await anthropicWithRetry(() => anthropicClient().messages.create({
+            model:      'claude-haiku-4-5',
+            max_tokens: 400,
+            messages: [{
+              role:    'user',
+              content: `Extract shelf registration details from this S-3 for ${ticker}.
 Return ONLY JSON:
 {"totalAmountDollars":number|null,"isATM":boolean,"atmAgent":string|null,"securitiesType":string|null,"expiryDate":"YYYY-MM-DD"|null}
 Text: ${context}`,
-          }],
-        })
-        try {
-          const t = res.content[0]?.type === 'text' ? res.content[0].text : ''
-          const clean = t.replace(/```json|```/g, '').trim()
-          const match = clean.match(/\{[\s\S]*\}/)
-          const p = JSON.parse(match ? match[0] : clean) as {
-            totalAmountDollars: number | null
-            isATM:              boolean
-            atmAgent:           string | null
-            securitiesType:     string | null
-            expiryDate:         string | null
+            }],
+          }))
+          try {
+            const t = res.content[0]?.type === 'text' ? res.content[0].text : ''
+            const clean = t.replace(/```json|```/g, '').trim()
+            const match = clean.match(/\{[\s\S]*\}/)
+            const p = JSON.parse(match ? match[0] : clean) as {
+              totalAmountDollars: number | null
+              isATM:              boolean
+              atmAgent:           string | null
+              securitiesType:     string | null
+              expiryDate:         string | null
+            }
+            shelfTotal      = p.totalAmountDollars != null ? p.totalAmountDollars / 1e9 : null
+            hasAtm          = !!p.isATM
+            atmAgent        = p.atmAgent
+            shelfSecurities = p.securitiesType
+            shelfExpiryDate = p.expiryDate
+          } catch {
+            // JSON parse failure — leave shelf-detail nulls
           }
-          shelfTotal      = p.totalAmountDollars != null ? p.totalAmountDollars / 1e9 : null
-          hasAtm          = !!p.isATM
-          atmAgent        = p.atmAgent
-          shelfSecurities = p.securitiesType
-          shelfExpiryDate = p.expiryDate
-        } catch {
-          // leave nulls — extraction failure is non-fatal
+        } catch (e) {
+          console.warn(`  [capital] Shelf-amount Claude call failed for ${ticker} (${(e as Error).message.slice(0, 60)}…) — storing EDGAR metadata only`)
         }
       }
     }

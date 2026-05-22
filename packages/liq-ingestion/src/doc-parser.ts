@@ -46,6 +46,28 @@ const SECTION_PATTERNS_10K: Array<{
   { pattern: /REPORT\s+OF\s+INDEPENDENT\s+REGISTERED/i,      key: 'auditor_report',    label: 'Report of Independent Registered Public Accounting Firm', type: 'item', num: 'AUDIT' },
 ]
 
+// 20-F (foreign private issuers — Canadian / European / Asian companies listed
+// in the US) uses different Item numbering. We reuse the 10-K parsing machinery
+// since Notes structure and auditor report are similar; only the Item-level
+// boundaries differ.
+const SECTION_PATTERNS_20F: Array<{
+  pattern: RegExp
+  key:     string
+  label:   string
+  type:    'item'
+  num:     string
+}> = [
+  { pattern: /ITEM\s+3[\s.]+KEY\s+INFORMATION/i,               key: 'item_3_key_info',       label: 'Item 3 — Key Information',                  type: 'item', num: '3'  },
+  { pattern: /ITEM\s+4[\s.]+INFORMATION\s+ON\s+THE\s+COMPANY/i,key: 'item_4_company',        label: 'Item 4 — Information on the Company',       type: 'item', num: '4'  },
+  { pattern: /ITEM\s+5[\s.]+OPERATING\s+AND\s+FINANCIAL/i,     key: 'item_5_mda',            label: 'Item 5 — Operating and Financial Review',   type: 'item', num: '5'  },
+  { pattern: /ITEM\s+6[\s.]+DIRECTORS/i,                       key: 'item_6_directors',      label: 'Item 6 — Directors, Senior Management',     type: 'item', num: '6'  },
+  { pattern: /ITEM\s+8[\s.]+FINANCIAL\s+INFORMATION/i,         key: 'item_8_financial_info', label: 'Item 8 — Financial Information',            type: 'item', num: '8'  },
+  { pattern: /ITEM\s+1[57][\s.]+CONTROLS/i,                    key: 'item_15_controls',      label: 'Item 15 — Controls and Procedures',         type: 'item', num: '15' },
+  { pattern: /ITEM\s+1[78][\s.]+FINANCIAL\s+STATEMENTS/i,      key: 'item_17_statements',    label: 'Item 17/18 — Financial Statements',         type: 'item', num: '17' },
+  // Auditor letter — same PCAOB-mandated header on 20-F filings as on 10-K.
+  { pattern: /REPORT\s+OF\s+INDEPENDENT\s+REGISTERED/i,        key: 'auditor_report',        label: 'Report of Independent Registered Public Accounting Firm', type: 'item', num: 'AUDIT' },
+]
+
 function stripHtml(html: string): string {
   return html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
@@ -85,10 +107,16 @@ export function parseDocument(html: string, filingType: string): DocumentSection
   const text = stripHtml(html)
   const sections: DocumentSection[] = []
 
-  if (filingType === '10-K' || filingType === '10-Q') {
+  if (filingType === '10-K' || filingType === '10-Q' || filingType === '20-F' || filingType === '40-F') {
+    // 20-F and 40-F (Canadian MJDS) use foreign-issuer Item numbering. Pick
+    // the right pattern set; Notes detection + paragraph fallback are shared.
+    const patternSet = (filingType === '20-F' || filingType === '40-F')
+      ? SECTION_PATTERNS_20F
+      : SECTION_PATTERNS_10K
+
     // Pass 1: find Item-level boundaries
     const itemBoundaries: Array<{ idx: number; key: string; label: string; type: 'item'; num: string }> = []
-    for (const pat of SECTION_PATTERNS_10K) {
+    for (const pat of patternSet) {
       const match = text.match(pat.pattern)
       if (match) {
         const idx = text.indexOf(match[0])
@@ -104,7 +132,10 @@ export function parseDocument(html: string, filingType: string): DocumentSection
       const content = text.slice(start, end).trim()
       const { key, label, num } = itemBoundaries[i]
 
-      if (key === 'item_8_financials') {
+      // Sub-split Notes inside the Financial Statements section. 10-K uses
+      // key 'item_8_financials'; 20-F uses 'item_8_financial_info' or
+      // 'item_17_statements' depending on which Item header is present.
+      if (key === 'item_8_financials' || key === 'item_8_financial_info' || key === 'item_17_statements') {
         const noteMatches = [...content.matchAll(/(?:NOTE|note)\s+(\d+)[.\s—–-]+([^\n]{5,80})/g)]
         if (noteMatches.length > 0) {
           for (let j = 0; j < noteMatches.length; j++) {
