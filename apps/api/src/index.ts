@@ -28,6 +28,7 @@ import { marketRoutes }        from './routes/market'
 import { fundamentalsRoutes }  from './routes/fundamentals'
 import { newsRoutes }          from './routes/news'
 import { liqRoutes }           from './routes/liq'
+import { legalRoutes }         from './routes/legal'
 import { ownershipRoutes }     from './routes/ownership'
 import { aiRoutes }            from './routes/ai'
 import { userRoutes }          from './routes/user'
@@ -49,6 +50,7 @@ app.route('/api/v1/market',        marketRoutes)
 app.route('/api/v1/fundamentals',  fundamentalsRoutes)
 app.route('/api/v1/news',          newsRoutes)
 app.route('/api/v1/liq',           liqRoutes)
+app.route('/api/v1/legal',         legalRoutes)
 app.route('/api/v1/ownership',     ownershipRoutes)
 app.route('/api/v1/ai',            aiRoutes)
 app.route('/api/v1/user',          userRoutes)

@@ -45,7 +45,7 @@ export type ScreenCommand =
   | 'DES' | 'GP' | 'GIP' | 'HP' | 'QR'
   | 'FA' | 'EE' | 'ANR' | 'RV' | 'EQS'
   | 'CN' | 'NI' | 'N' | 'TOP'
-  | 'LIQ' | 'OWN' | 'SECF'
+  | 'LIQ' | 'LEGAL' | 'LEG' | 'OWN' | 'SECF'
   | 'ECO' | 'MOV' | 'MOST' | 'W'
   | 'GPC' | 'COMP' | 'SCTR' | 'DVD'
   | 'EVTS' | 'ERN' | 'WL' | 'PORT'
@@ -76,6 +76,8 @@ export const COMMAND_DESCRIPTIONS: Record<ScreenCommand, string> = {
   N:     'Market news — broad financial news feed',
   TOP:   'Top headlines — market-moving news',
   LIQ:   'Liquidity — cash runway & shelf registration',
+  LEGAL: 'Legal & governance — counsel, auditor, litigation',
+  LEG:   'Legal & governance — same as LEGAL',
   OWN:   'Ownership — 13F institutional holders',
   SECF:  'SEC filings — 10-K, 10-Q, 8-K, 13F',
   ECO:   'Economic calendar — macro releases',
@@ -173,6 +175,48 @@ export interface LIQData {
 
   dataQuality:    'full' | 'partial' | 'minimal'
   missingFields:  string[]
+}
+
+// LEGAL screen — backed by battu.company_governance (populated by ingest:liq).
+// Served from /api/v1/legal/:ticker; pure DB read, no per-request extraction.
+export interface LEGALData {
+  ticker:                string
+  extractedAt:           string | null
+
+  // Counsel
+  counselPrimary:        string | null
+  counselSpecial:        string | null
+
+  // Audit
+  auditorName:           string | null
+  auditorSince:          string | null
+  auditOpinionClean:     boolean
+  hasGoingConcern:       boolean
+
+  // Litigation
+  litigationCount:       number | null
+  litigationSummary:     string | null
+  secInvestigation:      boolean
+  regulatoryProceedings: string | null
+
+  // FDA (biotech / pharma)
+  fdaStatus:             string | null
+  fdaLastAction:         string | null
+  fdaLastDate:           string | null
+
+  // Insider activity (placeholder — populated when insider feed lands)
+  insiderNet90d:         string | null
+  insiderLastDate:       string | null
+  ceoActivity90d:        string | null
+
+  // Sources
+  source10kUrl:          string | null
+  sourceS3Url:           string | null
+  sourceProxyUrl:        string | null
+
+  // Quality
+  dataQuality:           'full' | 'partial' | 'minimal'
+  missingFields:         string[]
 }
 
 export interface LIQProgress {

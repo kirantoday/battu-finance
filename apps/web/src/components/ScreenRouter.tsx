@@ -4,7 +4,8 @@ import { GPScreen }  from '@/screens/GP'
 import { FAScreen }  from '@/screens/FA'
 import { NIScreen }  from '@/screens/NI'
 import { WLScreen }  from '@/screens/WL'
-import { LIQScreen } from '@/screens/LIQ'
+import { LIQScreen }   from '@/screens/LIQ'
+import { LEGALScreen } from '@/screens/LEGAL'
 
 export function ScreenRouter() {
   const currentScreen = useTerminal((s) => s.currentScreen)
@@ -29,6 +30,8 @@ export function ScreenRouter() {
   ) return <NIScreen />
   if (currentScreen === 'WL') return <WLScreen />
   if (currentScreen === 'LIQ') return <LIQScreen />
+  // LEG is the short alias for LEGAL.
+  if (currentScreen === 'LEGAL' || currentScreen === 'LEG') return <LEGALScreen />
 
   // Stub fallback for screens not yet implemented
   return (

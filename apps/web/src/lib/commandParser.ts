@@ -2,7 +2,7 @@ import type { ParsedCommand, ScreenCommand } from '@battu/shared'
 
 const VALID_SCREENS: ScreenCommand[] = [
   'DES','GP','GIP','HP','QR','FA','EE','ANR','RV','EQS',
-  'CN','NI','N','TOP','LIQ','OWN','SECF','ECO','MOV','MOST',
+  'CN','NI','N','TOP','LIQ','LEGAL','LEG','OWN','SECF','ECO','MOV','MOST',
   'W','GPC','COMP','SCTR','DVD','EVTS','ERN','WL','PORT',
 ]
 const TIMEFRAMES = ['1D','1W','1M','3M','1Y','5Y','10Y']

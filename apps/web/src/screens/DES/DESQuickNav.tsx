@@ -10,8 +10,9 @@ const NAV_BUTTONS = [
   { cmd: 'ANR',  label: 'ANR',  title: 'Analyst Ratings'    },
   { cmd: 'OWN',  label: 'OWN',  title: '13F Ownership'      },
   { cmd: 'NI',   label: 'NI',   title: 'News Feed'          },
-  { cmd: 'LIQ',  label: 'LIQ',  title: 'Cash Runway'        },
-  { cmd: 'SECF', label: 'SECF', title: 'SEC Filings'        },
+  { cmd: 'LIQ',   label: 'LIQ',   title: 'Cash Runway'         },
+  { cmd: 'LEGAL', label: 'LEGAL', title: 'Legal & Governance'  },
+  { cmd: 'SECF',  label: 'SECF',  title: 'SEC Filings'         },
   { cmd: 'RV',   label: 'RV',   title: 'Relative Valuation' },
   { cmd: 'GPC',  label: 'GPC',  title: 'Compare to Peers'   },
 ]
