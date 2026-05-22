@@ -37,6 +37,18 @@ export async function extractAndStoreGovernance(
   console.log(`  [governance] Extracting for ${ticker}...`)
   const missing: string[] = []
 
+  // Detect the actual annual filing type so prompts don't say "10-K" when the
+  // chunks came from a 20-F or 40-F. The hybridSearch family-mapping handles
+  // the corpus side, but Claude needs the right vocabulary in the prompt.
+  const annualForms  = ['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']
+  const annualRows   = await pgSql`
+    SELECT DISTINCT filing_type FROM battu.doc_chunks
+    WHERE ticker = ${ticker}
+      AND filing_type = ANY(${annualForms})
+    LIMIT 1
+  ` as unknown as Array<{ filing_type: string }>
+  const annualFilingType = annualRows[0]?.filing_type ?? '10-K'
+
   // Pull 4 RAG queries in parallel — they all hit the same indexes
   const [counselChunks, auditorChunks, litigationChunks, goingConcernChunks] =
     await Promise.all([
@@ -48,24 +60,27 @@ export async function extractAndStoreGovernance(
         8,
       ).catch(() => []),
       // Auditor: 10-K's auditor report often only shows a PCAOB ID, with the
-      // actual firm name appearing in the S-3 "EXPERTS" section
+      // actual firm name appearing in the S-3 / F-3 "EXPERTS" section
       // ("incorporated in reliance on the report of [Firm], independent
       // registered public accounting firm"). Search both filing types.
+      // filingTypeFamily expands '10-K' to also cover 20-F/40-F, and 'S-3'
+      // to also cover F-3/F-10 for foreign issuers.
       Promise.all([
         hybridSearch(
           ticker, '10-K',
-          'independent registered public accounting firm auditor report opinion PricewaterhouseCoopers Deloitte KPMG Ernst Young PCAOB',
+          'independent registered public accounting firm auditor report opinion PricewaterhouseCoopers Deloitte KPMG Ernst Young Grant Thornton BDO PCAOB',
           8,
         ).catch(() => []),
         hybridSearch(
           ticker, 'S-3',
-          'experts auditor independent registered public accounting firm PricewaterhouseCoopers Deloitte KPMG Ernst Young',
+          'experts auditor independent registered public accounting firm PricewaterhouseCoopers Deloitte KPMG Ernst Young Grant Thornton BDO',
           5,
         ).catch(() => []),
-        // S-3 first — the EXPERTS section in S-3s reliably names the auditor
-        // ("incorporated in reliance on the report of [Firm]"). The 10-K's
-        // own auditor report often shows only a PCAOB ID after HTML stripping.
-      ]).then(([tenK, s3]) => [...s3, ...tenK]),
+        // S-3/F-3 first — the EXPERTS section reliably names the auditor
+        // ("incorporated in reliance on the report of [Firm]"). The 10-K /
+        // 20-F / 40-F auditor report often shows only a PCAOB ID after
+        // HTML stripping.
+      ]).then(([annual, shelf]) => [...shelf, ...annual]),
       hybridSearch(ticker, '10-K', 'legal proceedings lawsuits pending claims material litigation contingencies',  5).catch(() => []),
       hybridSearch(ticker, '10-K', 'going concern substantial doubt ability to continue operations', 3).catch(() => []),
     ])
@@ -76,7 +91,13 @@ export async function extractAndStoreGovernance(
   if (counselChunks.length > 0) {
     const ctx = counselChunks.map(c => c.chunkText).join('\n\n').slice(0, 4000)
     const r = await claudeHaikuExtract<{ counselPrimary: string | null; counselSpecial: string | null }>(
-      `Extract legal counsel from this S-3 filing for ${ticker}.
+      `Extract legal counsel from this shelf-registration filing for ${ticker}.
+
+This may be a US S-3 / S-3ASR (domestic issuer) or a foreign-issuer shelf
+(F-3 / F-3ASR / F-10). In foreign filings the counsel section may name a
+local firm (e.g. Stikeman Elliott for Canadian issuers, Norton Rose Fulbright,
+Linklaters) in addition to or instead of a US firm.
+
 Return ONLY JSON: {"counselPrimary":string|null,"counselSpecial":string|null}
 Text: ${ctx}`,
     )
@@ -112,12 +133,16 @@ Text: ${ctx}`,
       auditorSince: string | null
       opinionClean: boolean
     }>(
-      `Extract the company's independent auditor from this 10-K excerpt for ${ticker}.
+      `Extract the company's independent auditor from this ${annualFilingType} annual report excerpt for ${ticker}.
 
-The auditor name is a major accounting firm like PricewaterhouseCoopers (PwC),
-Deloitte, KPMG, Ernst & Young (EY), Grant Thornton, or BDO. Look for phrases
-like "signed by [firm]" or "/s/ [firm name]" at the end of the audit report.
-If you see "PCAOB ID No." it's near the auditor signature.
+This may be a US 10-K, a foreign private issuer 20-F, or a Canadian MJDS
+40-F. In all three the auditor is a major accounting firm: PricewaterhouseCoopers
+(PwC), Deloitte, KPMG, Ernst & Young (EY), Grant Thornton, or BDO. Foreign
+issuers sometimes use local firms (De Visser Gray, MNP, Raymond Chabot Grant
+Thornton, etc.) — extract whatever firm name appears.
+
+Look for phrases like "signed by [firm]" or "/s/ [firm name]" at the end of
+the audit report. If you see "PCAOB ID No." it's near the auditor signature.
 
 Return ONLY JSON: {"auditorName":string|null,"auditorSince":string|null,"opinionClean":boolean}
 - Strip "LLP", "LLC", "P.C." suffixes — return e.g. "PricewaterhouseCoopers" not "PricewaterhouseCoopers LLP".
@@ -150,7 +175,9 @@ ${ctx}`,
       summary:          string | null
       secInvestigation: boolean
     }>(
-      `Extract litigation summary from this 10-K for ${ticker}.
+      `Extract litigation summary from this ${annualFilingType} annual report for ${ticker}.
+Filing may be a US 10-K or foreign issuer 20-F / 40-F — legal proceedings
+language is similar across all three.
 Return ONLY JSON: {"count":number|null,"summary":string|null,"secInvestigation":boolean}
 Text: ${ctx}`,
     )

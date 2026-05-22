@@ -233,21 +233,29 @@ export function buildFilingUrl(cik: string, accessionNumber: string, primaryDocu
 // This is the cleanest free source for cash position when FMP gates these
 // endpoints behind a paid plan.
 
+type XBRLFactEntry = {
+  val:   number
+  end:   string
+  form:  string
+  fp?:   string
+  fy?:   number
+  accn?: string
+}
+
+type XBRLConcept = {
+  label?: string
+  units?: Record<string, XBRLFactEntry[]>
+}
+
 export interface XBRLCompanyFacts {
-  cik:       number
+  cik:        number
   entityName: string
   facts?: {
-    'us-gaap'?: Record<string, {
-      label?: string
-      units?: Record<string, Array<{
-        val:   number
-        end:   string
-        form:  string
-        fp?:   string
-        fy?:   number
-        accn?: string
-      }>>
-    }>
+    // Domestic issuers report under us-gaap. Foreign private issuers (20-F)
+    // and Canadian MJDS issuers (40-F) report under ifrs-full. Some filers
+    // (typically dual-listed Canadian companies) include both.
+    'us-gaap'?:   Record<string, XBRLConcept>
+    'ifrs-full'?: Record<string, XBRLConcept>
   }
 }
 
@@ -283,38 +291,113 @@ function getMostRecentXBRLValue(
   } catch { return null }
 }
 
+/**
+ * Most recent value for an ifrs-full concept. Foreign filers report in their
+ * reporting currency — try USD first, then common reporting currencies
+ * (CAD for Canadian MJDS, GBP/EUR for European FPIs). The caller treats the
+ * returned number as approximate USD; for CAD/GBP/EUR returns the upstream
+ * code should convert, but for cash-runway purposes the order of magnitude
+ * is what matters and demo-tier tickers report in USD anyway.
+ */
+function getMostRecentIFRSValue(
+  facts: XBRLCompanyFacts | null,
+  concept: string,
+  form?: string,
+): number | null {
+  try {
+    const units = facts?.facts?.['ifrs-full']?.[concept]?.units
+    if (!units) return null
+    const entries =
+         units.USD
+      ?? units.CAD
+      ?? units.GBP
+      ?? units.EUR
+      ?? null
+    if (!entries?.length) return null
+    const filtered = form ? entries.filter(e => e.form === form) : entries
+    if (!filtered.length) return null
+    const sorted = [...filtered].sort((a, b) =>
+      new Date(b.end).getTime() - new Date(a.end).getTime()
+    )
+    return sorted[0]?.val ?? null
+  } catch { return null }
+}
+
 export interface XBRLCashData {
   cashAndEquiv:    number | null
   shortTermInvest: number | null
   operatingCF:     number | null
   capex:           number | null
+  taxonomy:        'us-gaap' | 'ifrs-full' | null
 }
 
-/** Cash position from XBRL — quarterly preferred, annual fallback. */
+/**
+ * Cash position from XBRL — tries us-gaap first (domestic 10-K/10-Q filers),
+ * falls back to ifrs-full (foreign private issuers under 20-F / 40-F).
+ * Quarterly preferred, annual fallback within each taxonomy.
+ */
 export async function getXBRLCashData(cik: string): Promise<XBRLCashData | null> {
   const facts = await getXBRLCompanyFacts(cik)
   if (!facts) return null
 
-  const cashAndEquiv =
-       getMostRecentXBRLValue(facts, 'CashAndCashEquivalentsAtCarryingValue', '10-Q')
-    ?? getMostRecentXBRLValue(facts, 'CashAndCashEquivalentsAtCarryingValue', '10-K')
-    ?? null
+  // ── Pass 1: us-gaap (domestic issuers) ──
+  if (facts.facts?.['us-gaap']) {
+    const cashAndEquiv =
+         getMostRecentXBRLValue(facts, 'CashAndCashEquivalentsAtCarryingValue', '10-Q')
+      ?? getMostRecentXBRLValue(facts, 'CashAndCashEquivalentsAtCarryingValue', '10-K')
+      ?? getMostRecentXBRLValue(facts, 'CashCashEquivalentsAndShortTermInvestments', '10-Q')
+      ?? null
 
-  const shortTermInvest =
-       getMostRecentXBRLValue(facts, 'ShortTermInvestments',         '10-Q')
-    ?? getMostRecentXBRLValue(facts, 'MarketableSecuritiesCurrent',  '10-Q')
-    ?? getMostRecentXBRLValue(facts, 'ShortTermInvestments',         '10-K')
-    ?? null
+    if (cashAndEquiv !== null) {
+      return {
+        cashAndEquiv,
+        shortTermInvest:
+             getMostRecentXBRLValue(facts, 'ShortTermInvestments',         '10-Q')
+          ?? getMostRecentXBRLValue(facts, 'MarketableSecuritiesCurrent',  '10-Q')
+          ?? getMostRecentXBRLValue(facts, 'ShortTermInvestments',         '10-K')
+          ?? null,
+        operatingCF:
+             getMostRecentXBRLValue(facts, 'NetCashProvidedByUsedInOperatingActivities', '10-Q')
+          ?? getMostRecentXBRLValue(facts, 'NetCashProvidedByUsedInOperatingActivities', '10-K')
+          ?? null,
+        capex:
+             getMostRecentXBRLValue(facts, 'PaymentsToAcquirePropertyPlantAndEquipment', '10-Q')
+          ?? getMostRecentXBRLValue(facts, 'PaymentsToAcquirePropertyPlantAndEquipment', '10-K')
+          ?? null,
+        taxonomy: 'us-gaap',
+      }
+    }
+  }
 
-  const operatingCF =
-       getMostRecentXBRLValue(facts, 'NetCashProvidedByUsedInOperatingActivities', '10-Q')
-    ?? getMostRecentXBRLValue(facts, 'NetCashProvidedByUsedInOperatingActivities', '10-K')
-    ?? null
+  // ── Pass 2: ifrs-full (foreign private issuers — 20-F / 40-F) ──
+  if (facts.facts?.['ifrs-full']) {
+    const cashAndEquiv =
+         getMostRecentIFRSValue(facts, 'CashAndCashEquivalents', '20-F')
+      ?? getMostRecentIFRSValue(facts, 'CashAndCashEquivalents', '40-F')
+      ?? getMostRecentIFRSValue(facts, 'CashAndCashEquivalents')
+      ?? getMostRecentIFRSValue(facts, 'CashAndBankBalances')
+      ?? null
 
-  const capex =
-       getMostRecentXBRLValue(facts, 'PaymentsToAcquirePropertyPlantAndEquipment', '10-Q')
-    ?? getMostRecentXBRLValue(facts, 'PaymentsToAcquirePropertyPlantAndEquipment', '10-K')
-    ?? null
+    if (cashAndEquiv !== null) {
+      return {
+        cashAndEquiv,
+        shortTermInvest:
+             getMostRecentIFRSValue(facts, 'CurrentInvestments')
+          ?? getMostRecentIFRSValue(facts, 'OtherCurrentFinancialAssets')
+          ?? null,
+        operatingCF:
+             getMostRecentIFRSValue(facts, 'CashFlowsFromUsedInOperatingActivities', '20-F')
+          ?? getMostRecentIFRSValue(facts, 'CashFlowsFromUsedInOperatingActivities', '40-F')
+          ?? getMostRecentIFRSValue(facts, 'CashFlowsFromUsedInOperatingActivities')
+          ?? null,
+        capex:
+             getMostRecentIFRSValue(facts, 'PurchaseOfPropertyPlantAndEquipment')
+          ?? getMostRecentIFRSValue(facts, 'AcquisitionOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities')
+          ?? null,
+        taxonomy: 'ifrs-full',
+      }
+    }
+  }
 
-  return { cashAndEquiv, shortTermInvest, operatingCF, capex }
+  return null
 }

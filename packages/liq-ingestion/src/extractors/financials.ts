@@ -49,16 +49,22 @@ async function claudeHaikuJson<T>(prompt: string): Promise<T | null> {
  * Pass 1 — lender focused. Uses ±2K windows around "administrative agent" /
  * "credit agreement, dated" markers so the lender mention (often deep in a
  * 16K-char chunk's exhibits list) always lands in Claude's prompt.
+ *
+ * filingType is the actual annual-report form we pulled chunks from
+ * (10-K / 20-F / 40-F). Including it in the prompt removes the "10-K" bias
+ * that made Claude skip facilities in foreign issuer filings.
  */
 async function extractLenderInfo(
-  chunks: Array<{ chunkText: string; section: string }>,
-  ticker: string,
+  chunks:     Array<{ chunkText: string; section: string }>,
+  ticker:     string,
+  filingType: string,
 ): Promise<Pick<CreditFacilityResult, 'hasCreditFacility' | 'facilityLender' | 'facilityType' | 'facilityTotal'> | null> {
   if (chunks.length === 0) return null
 
   function lenderWindow(text: string): string {
     const lower = text.toLowerCase()
-    for (const marker of ['administrative agent', 'credit agreement, dated']) {
+    // 'banking facilities' / 'overdraft' are IFRS-flavoured terms common in 20-F/40-F
+    for (const marker of ['administrative agent', 'credit agreement, dated', 'banking facilities', 'banking facility', 'overdraft facility']) {
       const i = lower.indexOf(marker)
       if (i >= 0) {
         const start = Math.max(0, i - 1000)
@@ -80,21 +86,35 @@ async function extractLenderInfo(
     facilityType:      string | null
     facilityTotal:     number | null
   }>(
-    `Extract LENDER info for ${ticker}'s primary revolving credit facility from these 10-K excerpts.
+    `Extract LENDER info for ${ticker}'s primary credit facility from these ${filingType} annual report excerpts.
+
+NOTE: This may be a US domestic (10-K) filing OR a foreign private issuer
+filing (20-F / 40-F). Credit facilities are sometimes named differently:
+- Revolving credit facility / revolving credit agreement (US 10-K)
+- Term loan facility, credit agreement (US 10-K)
+- Bank facility / banking facilities (common in IFRS / 20-F / 40-F)
+- Overdraft facility (common in foreign filings)
+- Loan facility, secured loan, working capital facility
+Extract from any of these regardless of filing type.
+
 Return ONLY valid JSON, no other text:
 {
   "hasCreditFacility": boolean,
-  "facilityLender":    "<bank name, e.g. 'Bank of America'>" | null,
-  "facilityType":      "<string, e.g. 'Senior unsecured revolving credit facility'>" | null,
-  "facilityTotal":     "<number in DOLLARS, e.g. 1500000000 for $1.5B>" | null
+  "facilityLender":    "<bank name, e.g. 'Bank of America' or 'HSBC'>" | null,
+  "facilityType":      "<string, e.g. 'Senior unsecured revolving credit facility' or 'Bank facility'>" | null,
+  "facilityTotal":     "<number in DOLLARS, e.g. 60000000 for $60M, 1500000000 for $1.5B>" | null
 }
 
 LENDER-EXTRACTION RULES:
-- The lender is typically named as "Administrative Agent" in credit agreements.
+- The lender is typically named as "Administrative Agent" in US credit agreements.
 - "Bank of America, N.A., as Administrative Agent"  → facilityLender: "Bank of America".
 - "JPMorgan Chase Bank, N.A., as administrative agent" → facilityLender: "JPMorgan Chase".
+- In 20-F/40-F filings the lender may simply be named: "facility with HSBC Bank"
+  or "loan agreement with Alpha Bank S.A." — extract that bank name.
 - If multiple agreements exist, return the LENDER for the MOST RECENT one (later date wins).
 - Strip "N.A.", "LLC", "Bank" suffixes — return just the firm name.
+- If amounts are in another currency (CAD, EUR, etc.), still return the number
+  as stated (do not convert) and prefix the currency in facilityType.
 
 If no credit facility found, set hasCreditFacility: false and others null.
 
@@ -109,8 +129,9 @@ ${context}`,
  * capacity, security, and covenants stays in context.
  */
 async function extractTermsInfo(
-  chunks: Array<{ chunkText: string; section: string }>,
-  ticker: string,
+  chunks:     Array<{ chunkText: string; section: string }>,
+  ticker:     string,
+  filingType: string,
 ): Promise<Pick<CreditFacilityResult,
   'facilityDrawn' | 'facilityUndrawn' | 'facilityExpiry' | 'facilitySecured' | 'facilityRate' | 'facilityCovenants'
 > | null> {
@@ -126,7 +147,7 @@ async function extractTermsInfo(
     facilityRate:       string | null
     facilityCovenants:  string | null
   }>(
-    `Extract TERMS of ${ticker}'s primary revolving credit facility from these 10-K excerpts.
+    `Extract TERMS of ${ticker}'s primary credit facility from these ${filingType} annual report excerpts.
 Return ONLY valid JSON, no other text:
 {
   "facilityDrawn":     "<number in DOLLARS — current balance outstanding>" | null,
@@ -153,6 +174,20 @@ export async function extractAndStoreFinancials(
 ): Promise<void> {
   console.log(`  [financials] Extracting for ${ticker}...`)
   const missing: string[] = []
+
+  // Detect which annual-report form this ticker actually filed. The RAG
+  // family-mapping in vector-store accepts '10-K' as a logical key and
+  // expands to 20-F / 40-F under the hood, but the Claude prompt + log lines
+  // benefit from naming the real filing type so foreign-issuer language is
+  // recognised correctly.
+  const annualForms  = ['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']
+  const annualRows   = await pgSql`
+    SELECT DISTINCT filing_type FROM battu.doc_chunks
+    WHERE ticker = ${ticker}
+      AND filing_type = ANY(${annualForms})
+    LIMIT 1
+  ` as unknown as Array<{ filing_type: string }>
+  const annualFilingType = annualRows[0]?.filing_type ?? '10-K'
 
   // ── XBRL cash data ──
   let cashAndEquiv:         number | null = null
@@ -192,21 +227,25 @@ export async function extractAndStoreFinancials(
   let cf: CreditFacilityResult | null = null
   try {
     const [lenderChunks, termsChunks] = await Promise.all([
+      // Logical key '10-K' is expanded to 10-K / 20-F / 40-F by filingTypeFamily
+      // in vector-store, so a single search covers domestic + foreign issuers.
+      // Query includes IFRS-flavoured terms ("banking facility", "overdraft")
+      // alongside US bank names so the BM25 leg fires for either filer type.
       hybridSearch(
         ticker, '10-K',
-        'revolving credit facility administrative agent bank lender Bank of America JPMorgan Chase Wells Fargo Citibank Goldman Sachs Morgan Stanley',
+        'revolving credit facility administrative agent bank lender banking facility overdraft facility loan agreement Bank of America JPMorgan Chase Wells Fargo Citibank HSBC Barclays Deutsche Bank',
         8,
       ),
       hybridSearch(
         ticker, '10-K',
-        'undrawn available maturity expiry date covenant SOFR interest rate secured unsecured outstanding borrowings',
+        'undrawn available maturity expiry date covenant SOFR LIBOR EURIBOR interest rate secured unsecured outstanding borrowings drawn',
         8,
       ),
     ])
 
     const [lenderInfo, termsInfo] = await Promise.all([
-      extractLenderInfo(lenderChunks, ticker),
-      extractTermsInfo(termsChunks,  ticker),
+      extractLenderInfo(lenderChunks, ticker, annualFilingType),
+      extractTermsInfo(termsChunks,   ticker, annualFilingType),
     ])
 
     if (lenderInfo || termsInfo) {

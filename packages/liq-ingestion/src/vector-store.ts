@@ -106,13 +106,18 @@ export async function isFilingProcessed(
 
 /**
  * Resolve a logical filingType into the actual `filing_type` values stored
- * in battu.doc_chunks. Each family covers domestic + foreign equivalents:
- *   '10-K' family: US 10-K + foreign 20-F + Canadian MJDS 40-F
- *   'S-3'  family: US S-3 + foreign F-3 + Canadian MJDS F-10
+ * in battu.doc_chunks. Each family covers domestic + foreign equivalents and
+ * their /A amendment variants:
+ *   '10-K' family: 10-K + 10-K/A + 20-F + 20-F/A + 40-F + 40-F/A (annual)
+ *   '10-Q' family: 10-Q + 10-Q/A
+ *   'S-3'  family: S-3 + S-3/A + S-3ASR + F-3 + F-3/A + F-3ASR + F-10 + F-10/A
+ *   '424B' family: 424B2 / 424B3 / 424B4 / 424B5
  */
 function filingTypeFamily(filingType: string): string[] {
-  if (filingType === '10-K') return ['10-K', '20-F', '40-F']
+  if (filingType === '10-K') return ['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']
+  if (filingType === '10-Q') return ['10-Q', '10-Q/A']
   if (filingType === 'S-3')  return ['S-3', 'S-3/A', 'S-3ASR', 'F-3', 'F-3/A', 'F-3ASR', 'F-10', 'F-10/A']
+  if (filingType === '424B') return ['424B2', '424B3', '424B4', '424B5']
   return [filingType]
 }
 
