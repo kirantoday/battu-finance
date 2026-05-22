@@ -1,4 +1,4 @@
-export { db } from './client'
+export { db, pgSql } from './client'
 export * from './schema/battu'
 
 // Re-export the SQL operators app code needs, so consumers don't have to add

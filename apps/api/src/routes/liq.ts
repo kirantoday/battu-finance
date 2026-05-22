@@ -1,98 +1,119 @@
 import { Hono } from 'hono'
-import { db, liqCache, eq } from '@battu/db'
-import { computeLIQ } from '@battu/edgar'
-import type { LIQData } from '@battu/edgar'
-import { fmpClient } from '@battu/data'
+import { pgSql } from '@battu/db'
+import type { LIQData } from '@battu/shared'
 
 export const liqRoutes = new Hono()
 
-// Cache TTL — 90 days per CLAUDE.md guidance ("Cache aggressively")
-const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000
-
-function isCacheFresh(computedAt: Date): boolean {
-  return Date.now() - computedAt.getTime() < CACHE_TTL_MS
-}
-
-async function upsertCache(ticker: string, data: LIQData) {
-  await db
-    .insert(liqCache)
-    .values({
-      ticker,
-      computedAt:       new Date(data.computedAt),
-      data:             data as unknown as Record<string, unknown>,
-      sourceFilings:    data.sources as unknown as Record<string, unknown>,
-      ingestionVersion: 'v1',
-      tickerCik:        null,
-    })
-    .onConflictDoUpdate({
-      target: liqCache.ticker,
-      set: {
-        computedAt:    new Date(data.computedAt),
-        data:          data as unknown as Record<string, unknown>,
-        sourceFilings: data.sources as unknown as Record<string, unknown>,
-      },
-    })
-}
-
-// GET /api/v1/liq/:ticker — cache-first, computes on miss
+/**
+ * GET /api/v1/liq/:ticker
+ * Reads from the three pre-extracted tables populated by `pnpm ingest:liq`.
+ * Sub-50ms target — no Claude/EDGAR calls at query time.
+ */
 liqRoutes.get('/:ticker', async (c) => {
   const ticker = c.req.param('ticker').toUpperCase()
 
-  // 1. Check cache
   try {
-    const cached = await db
-      .select()
-      .from(liqCache)
-      .where(eq(liqCache.ticker, ticker))
-      .limit(1)
+    const [fins, caps] = await Promise.all([
+      pgSql`SELECT * FROM battu.company_financials WHERE ticker = ${ticker} LIMIT 1`,
+      pgSql`SELECT * FROM battu.company_capital    WHERE ticker = ${ticker} LIMIT 1`,
+    ])
 
-    if (cached.length > 0 && cached[0].computedAt) {
-      const fresh = isCacheFresh(cached[0].computedAt)
+    const fin = fins[0] as Record<string, unknown> | undefined
+    const cap = caps[0] as Record<string, unknown> | undefined
+
+    if (!fin && !cap) {
       return c.json({
-        data:       cached[0].data as LIQData,
-        error:      null,
-        cached:     true,
-        stale:      !fresh,
-        computedAt: cached[0].computedAt,
-      })
+        data:           null,
+        error:          `${ticker} not yet ingested. Run: pnpm ingest:liq --ticker=${ticker}`,
+        cached:         false,
+        needsIngestion: true,
+      }, 404)
     }
-  } catch (err) {
-    console.error('[liq] cache read error:', err)
-  }
 
-  // 2. On-demand compute
-  console.log(`[liq] Computing on-demand for ${ticker}...`)
-  try {
-    const liqData = await computeLIQ(ticker, fmpClient)
-    await upsertCache(ticker, liqData)
-    return c.json({
-      data:       liqData,
-      error:      null,
-      cached:     false,
-      computedAt: new Date(liqData.computedAt),
-    })
+    const num = (v: unknown): number | null => {
+      if (v === null || v === undefined) return null
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    const str  = (v: unknown): string | null => (v == null ? null : String(v))
+    const bool = (v: unknown): boolean        => v === true || v === 't' || v === 'true'
+    const dateStr = (v: unknown): string | null => {
+      if (!v) return null
+      if (v instanceof Date) return v.toISOString().slice(0, 10)
+      return String(v).slice(0, 10)
+    }
+
+    const extractedAt =
+         (fin?.extracted_at instanceof Date && fin.extracted_at.toISOString())
+      || (cap?.extracted_at instanceof Date && cap.extracted_at.toISOString())
+      || str(fin?.extracted_at)
+      || str(cap?.extracted_at)
+      || new Date().toISOString()
+
+    const drawdowns = Array.isArray(cap?.source_drawdowns) ? cap!.source_drawdowns as string[] : []
+
+    const data: LIQData = {
+      ticker,
+      computedAt:          extractedAt,
+
+      // Cash position
+      cashAndEquivB:       num(fin?.cash_and_equiv),
+      shortTermInvestB:    num(fin?.short_term_invest),
+      quarterlyBurnB:      num(fin?.operating_cf_quarterly),
+      cashRunwayQtrs:      num(fin?.cash_runway_qtrs),
+
+      // Shelf
+      hasShelf:            bool(cap?.has_shelf),
+      shelfTotalB:         num(cap?.shelf_total),
+      shelfDrawdownsB:     num(cap?.drawdown_total),
+      shelfRemainingB:     num(cap?.shelf_remaining),
+      shelfFilingDate:     dateStr(cap?.shelf_filing_date),
+      shelfExpiryDate:     dateStr(cap?.shelf_expiry_date),
+      isATMProgram:        bool(cap?.has_atm),
+
+      // Credit facility
+      hasCreditFacility:   bool(fin?.has_credit_facility),
+      creditFacilityType:  str(fin?.facility_type),
+      creditTotalB:        num(fin?.facility_total),
+      creditDrawnB:        num(fin?.facility_drawn),
+      creditUndrawnB:      num(fin?.facility_undrawn),
+      creditExpiryDate:    dateStr(fin?.facility_expiry),
+      creditLender:        str(fin?.facility_lender),
+      creditInterestRate:  str(fin?.facility_rate),
+
+      totalLiquidityB:     num(fin?.total_liquidity),
+
+      sources: {
+        balanceSheet: str(fin?.source_xbrl_url) ?? undefined,
+        creditFiling: str(fin?.source_10k_url)  ?? undefined,
+        shelfFiling:  str(cap?.source_s3_url)   ?? undefined,
+        drawdowns,
+      },
+
+      dataQuality:
+        ((str(fin?.data_quality) ?? str(cap?.data_quality) ?? 'partial') as LIQData['dataQuality']),
+      missingFields: [
+        ...((fin?.missing_fields as string[] | undefined) ?? []),
+        ...((cap?.missing_fields as string[] | undefined) ?? []),
+      ],
+    }
+
+    return c.json({ data, error: null, cached: true, computedAt: data.computedAt })
   } catch (err) {
-    console.error('[liq] compute error:', err)
-    return c.json({ data: null, error: `Failed to compute LIQ for ${ticker}` }, 500)
+    console.error('[liq] read error:', err)
+    return c.json({ data: null, error: 'Database error' }, 500)
   }
 })
 
-// POST /api/v1/liq/:ticker/refresh — force recompute, bypass cache
+/**
+ * POST /api/v1/liq/:ticker/refresh — refresh now goes through the CLI ingestion job.
+ */
 liqRoutes.post('/:ticker/refresh', async (c) => {
   const ticker = c.req.param('ticker').toUpperCase()
-  console.log(`[liq] Force refresh for ${ticker}...`)
-
-  try {
-    const liqData = await computeLIQ(ticker, fmpClient)
-    await upsertCache(ticker, liqData)
-    return c.json({
-      data:       liqData,
-      error:      null,
-      cached:     false,
-      computedAt: new Date(liqData.computedAt),
-    })
-  } catch (err) {
-    console.error('[liq] refresh error:', err)
-    return c.json({ data: null, error: String(err) }, 500)
-  }
+  return c.json({
+    data:    null,
+    error:   null,
+    message: `To refresh ${ticker}, run: pnpm ingest:liq --ticker=${ticker}`,
+    command: `pnpm ingest:liq --ticker=${ticker}`,
+  })
 })

@@ -152,11 +152,21 @@ export async function getFilingsList(cik: string, formTypes: string[]): Promise<
 }
 
 // ── Fetch and lightly de-HTML a filing document ─────────────────────────────
-// Returns plain text (~ first 50k chars) suitable for Claude extraction.
+// Default: plain text, capped at 50k chars (suits the on-demand Claude path).
+// For the ingestion pipeline, pass { raw: true, maxBytes: 2_000_000 } to get
+// the raw HTML so parseDocument can do its own table-aware stripping.
+export interface FetchFilingOpts {
+  /** When true, return raw HTML — caller is responsible for stripping. */
+  raw?:      boolean
+  /** Max bytes to keep from the response. Defaults to 50_000 for text, full for raw. */
+  maxBytes?: number
+}
+
 export async function fetchFilingDocument(
   cik: string,
   accessionNumber: string,
   fileName?: string,
+  opts: FetchFilingOpts = {},
 ): Promise<string | null> {
   try {
     const accNoClean = accessionNumber.replace(/-/g, '')
@@ -187,6 +197,13 @@ export async function fetchFilingDocument(
     if (!docRes.ok) return null
 
     const html = await docRes.text()
+
+    if (opts.raw) {
+      const limit = opts.maxBytes ?? Number.MAX_SAFE_INTEGER
+      return html.length > limit ? html.slice(0, limit) : html
+    }
+
+    const limit = opts.maxBytes ?? 50_000
     return html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -197,7 +214,7 @@ export async function fetchFilingDocument(
       .replace(/&gt;/g, '>')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 50000)
+      .slice(0, limit)
   } catch (e) {
     console.warn(`[edgar] fetchFilingDocument error: ${(e as Error).message}`)
     return null

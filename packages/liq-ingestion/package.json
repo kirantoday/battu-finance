@@ -1,0 +1,23 @@
+{
+  "name": "@battu/liq-ingestion",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "ingest": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "@battu/db": "workspace:*",
+    "@battu/edgar": "workspace:*",
+    "@battu/shared": "workspace:*",
+    "dotenv": "^16.0.0",
+    "postgres": "^3.4.0",
+    "voyageai": "^0.0.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

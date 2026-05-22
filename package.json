@@ -12,7 +12,8 @@
     "seed:groundtruth": "pnpm --filter @battu/validation run seed",
     "db:generate": "pnpm --filter @battu/db db:generate",
     "db:migrate": "pnpm --filter @battu/db db:migrate",
-    "db:studio": "pnpm --filter @battu/db db:studio"
+    "db:studio": "pnpm --filter @battu/db db:studio",
+    "ingest:liq": "pnpm --filter @battu/liq-ingestion run ingest"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
