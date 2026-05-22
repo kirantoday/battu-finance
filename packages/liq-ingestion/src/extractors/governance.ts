@@ -191,18 +191,57 @@ Text: ${ctx}`,
     :  missing.length <= 2  ? 'partial'
     :  'minimal'
 
+  // Mirror source URLs from the sibling extractors so the LEGAL screen can
+  // link out to the underlying filings. The governance extractor doesn't
+  // download those documents itself — it works from RAG chunks — so the URLs
+  // are sourced from the rows the financials + capital extractors just wrote.
+  const finRow = await pgSql`
+    SELECT source_10k_url FROM battu.company_financials
+    WHERE ticker = ${ticker} LIMIT 1
+  ` as unknown as Array<{ source_10k_url: string | null }>
+  const capRow = await pgSql`
+    SELECT source_s3_url FROM battu.company_capital
+    WHERE ticker = ${ticker} LIMIT 1
+  ` as unknown as Array<{ source_s3_url: string | null }>
+  let source10kUrl: string | null = finRow[0]?.source_10k_url ?? null
+  const sourceS3Url: string | null = capRow[0]?.source_s3_url ?? null
+
+  // The financials extractor doesn't currently write source_10k_url — fall back
+  // to constructing the EDGAR filing-index URL from filing_index, which
+  // tracks the accession we ingested chunks from. This covers 10-K plus the
+  // foreign-issuer equivalents (20-F / 40-F and their amendment variants).
+  if (!source10kUrl) {
+    const annualForms = ['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']
+    const annualRows  = await pgSql`
+      SELECT cik, accession_no
+      FROM   battu.filing_index
+      WHERE  ticker      = ${ticker}
+        AND  filing_type = ANY(${annualForms})
+        AND  status      = 'done'
+      ORDER  BY filing_date DESC
+      LIMIT 1
+    ` as unknown as Array<{ cik: string; accession_no: string }>
+    if (annualRows[0]) {
+      const cikNum     = parseInt(annualRows[0].cik, 10)
+      const accNoClean = annualRows[0].accession_no.replace(/-/g, '')
+      source10kUrl = `https://www.sec.gov/Archives/edgar/data/${cikNum}/${accNoClean}/${annualRows[0].accession_no}-index.htm`
+    }
+  }
+
   await pgSql`
     INSERT INTO battu.company_governance
       (ticker, cik, extracted_at,
        counsel_primary, counsel_special,
        auditor_name, auditor_since, audit_opinion_clean, has_going_concern,
        litigation_count, litigation_summary, sec_investigation,
+       source_10k_url, source_s3_url,
        data_quality, missing_fields)
     VALUES
       (${ticker}, ${cik}, NOW(),
        ${counselPrimary}, ${counselSpecial},
        ${auditorName}, ${auditorSince}, ${auditOpinionClean}, ${hasGoingConcern},
        ${litigationCount}, ${litigationSummary}, ${secInvestigation},
+       ${source10kUrl}, ${sourceS3Url},
        ${dataQuality}, ${missing})
     ON CONFLICT (ticker) DO UPDATE SET
       extracted_at        = NOW(),
@@ -215,6 +254,8 @@ Text: ${ctx}`,
       litigation_count    = EXCLUDED.litigation_count,
       litigation_summary  = EXCLUDED.litigation_summary,
       sec_investigation   = EXCLUDED.sec_investigation,
+      source_10k_url      = EXCLUDED.source_10k_url,
+      source_s3_url       = EXCLUDED.source_s3_url,
       data_quality        = EXCLUDED.data_quality,
       missing_fields      = EXCLUDED.missing_fields
   `

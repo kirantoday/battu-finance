@@ -309,6 +309,11 @@ function finalize(ticker: string, d: IntermediateLIQ): LIQData {
     creditLender:        d.cfLender ?? null,
     creditInterestRate:  d.cfRate ?? null,
     totalLiquidityB:     d.totalLiqB ?? null,
+    // Governance flags are populated by the ingestion pipeline, not by this
+    // on-demand computer. Default to false here; the API route overrides
+    // these from company_governance when serving cached rows.
+    hasGoingConcern:     false,
+    secInvestigation:    false,
     sources:             d.sources,
     dataQuality:         quality,
     missingFields:       adjustedMissing,

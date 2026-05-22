@@ -13,13 +13,20 @@ liqRoutes.get('/:ticker', async (c) => {
   const ticker = c.req.param('ticker').toUpperCase()
 
   try {
-    const [fins, caps] = await Promise.all([
+    const [fins, caps, govs] = await Promise.all([
       pgSql`SELECT * FROM battu.company_financials WHERE ticker = ${ticker} LIMIT 1`,
       pgSql`SELECT * FROM battu.company_capital    WHERE ticker = ${ticker} LIMIT 1`,
+      // Governance flags are cross-referenced into LIQData so the LIQ header
+      // can show going-concern / SEC-investigation warnings without an
+      // extra round-trip from the client.
+      pgSql`SELECT has_going_concern, sec_investigation
+            FROM   battu.company_governance
+            WHERE  ticker = ${ticker} LIMIT 1`,
     ])
 
     const fin = fins[0] as Record<string, unknown> | undefined
     const cap = caps[0] as Record<string, unknown> | undefined
+    const gov = govs[0] as Record<string, unknown> | undefined
 
     if (!fin && !cap) {
       return c.json({
@@ -82,6 +89,9 @@ liqRoutes.get('/:ticker', async (c) => {
       creditInterestRate:  str(fin?.facility_rate),
 
       totalLiquidityB:     num(fin?.total_liquidity),
+
+      hasGoingConcern:     bool(gov?.has_going_concern),
+      secInvestigation:    bool(gov?.sec_investigation),
 
       sources: {
         balanceSheet: str(fin?.source_xbrl_url) ?? undefined,

@@ -40,6 +40,35 @@ export function LIQHeader({ ticker, data, cached, stale, onRefresh }: Props) {
           <span style={{ color: qualityColor, fontSize: '9px', marginLeft: '10px', letterSpacing: '1px' }}>
             ● {data.dataQuality.toUpperCase()} DATA
           </span>
+          {/* Cross-referenced from company_governance — mirrors the badges on LEGAL */}
+          {data.hasGoingConcern && (
+            <span style={{
+              color:         'var(--battu-bg)',
+              background:    'var(--battu-negative)',
+              fontSize:      '9px',
+              letterSpacing: '1px',
+              padding:       '2px 6px',
+              borderRadius:  '2px',
+              fontWeight:    'bold',
+              marginLeft:    '8px',
+            }}>
+              ⚠ GOING CONCERN
+            </span>
+          )}
+          {data.secInvestigation && (
+            <span style={{
+              color:         'var(--battu-bg)',
+              background:    'var(--battu-warning)',
+              fontSize:      '9px',
+              letterSpacing: '1px',
+              padding:       '2px 6px',
+              borderRadius:  '2px',
+              fontWeight:    'bold',
+              marginLeft:    '8px',
+            }}>
+              ⚠ SEC INVESTIGATION
+            </span>
+          )}
           {stale && (
             <span style={{ color: 'var(--battu-warning)', fontSize: '9px', marginLeft: '8px' }}>
               ⚠ DATA MAY BE STALE

@@ -166,6 +166,12 @@ export interface LIQData {
 
   totalLiquidityB:     number | null
 
+  // Governance flags — cross-referenced from company_governance so the LIQ
+  // header can warn when a ticker has a going-concern note or an active SEC
+  // investigation alongside its liquidity profile.
+  hasGoingConcern:     boolean
+  secInvestigation:    boolean
+
   sources: {
     balanceSheet?: string
     shelfFiling?:  string

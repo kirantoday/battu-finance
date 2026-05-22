@@ -34,8 +34,23 @@ const FILING_TYPE_QUERIES: Array<{ label: string; forms: string[] }> = [
   { label: 'S-3',  forms: ['S-3', 'S-3/A', 'S-3ASR', 'F-3', 'F-3/A', 'F-3ASR', 'F-10', 'F-10/A'] },
 ]
 
-export async function processTicker(ticker: string): Promise<PipelineResult> {
-  console.log(`\n[pipeline] Processing ${ticker}...`)
+export type ExtractorName = 'financials' | 'capital' | 'governance'
+
+export interface ProcessOptions {
+  /**
+   * When set, skip download/parse/chunk/embed entirely and re-run only the
+   * named extractor against chunks already stored in battu.doc_chunks.
+   * Use this to backfill new extractor logic without paying SEC + Voyage
+   * round-trips again.
+   */
+  extractOnly?: ExtractorName
+}
+
+export async function processTicker(
+  ticker: string,
+  opts:   ProcessOptions = {},
+): Promise<PipelineResult> {
+  console.log(`\n[pipeline] Processing ${ticker}${opts.extractOnly ? ` (extract-only: ${opts.extractOnly})` : ''}...`)
 
   try {
     const cik = await getCIK(ticker)
@@ -43,6 +58,23 @@ export async function processTicker(ticker: string): Promise<PipelineResult> {
       return { ticker, success: false, error: 'CIK not found', chunks: 0 }
     }
     console.log(`  CIK: ${cik}`)
+
+    // Fast path: extractor-only re-run. Skip all download/chunk/embed work
+    // and just re-execute the named extractor against existing chunks.
+    if (opts.extractOnly) {
+      const fn =
+          opts.extractOnly === 'financials' ? extractAndStoreFinancials
+        : opts.extractOnly === 'capital'    ? extractAndStoreCapital
+        : extractAndStoreGovernance
+      try {
+        await fn(ticker, cik)
+        console.log(`[pipeline] ✓ ${ticker} ${opts.extractOnly} re-extracted`)
+        return { ticker, success: true, chunks: 0 }
+      } catch (err) {
+        console.error(`[pipeline] ✗ ${ticker} ${opts.extractOnly} extractor failed:`, err)
+        return { ticker, success: false, error: String((err as Error)?.message ?? err), chunks: 0 }
+      }
+    }
 
     let totalChunks = 0
 
@@ -142,13 +174,14 @@ export async function processTicker(ticker: string): Promise<PipelineResult> {
 export async function processBatch(
   tickers:     string[],
   concurrency: number = 3,
+  opts:        ProcessOptions = {},
 ): Promise<PipelineResult[]> {
   const results: PipelineResult[] = []
   const queue = [...tickers]
 
   while (queue.length > 0) {
     const batch        = queue.splice(0, concurrency)
-    const batchResults = await Promise.all(batch.map(t => processTicker(t)))
+    const batchResults = await Promise.all(batch.map(t => processTicker(t, opts)))
     results.push(...batchResults)
     if (queue.length > 0) await new Promise(r => setTimeout(r, 500))
   }

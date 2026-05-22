@@ -8,6 +8,7 @@
 import './loadEnv'
 
 import { processBatch }   from './pipeline'
+import type { ExtractorName, ProcessOptions } from './pipeline'
 import { getTierTickers } from './ticker-universe'
 
 function parseArg(flag: string): string | undefined {
@@ -15,23 +16,34 @@ function parseArg(flag: string): string | undefined {
   return arg?.split('=')[1]
 }
 
+const VALID_EXTRACTORS: ExtractorName[] = ['financials', 'capital', 'governance']
+
 async function main() {
-  const ticker = parseArg('ticker')
-  const tier   = parseArg('tier') ?? 'demo'
+  const ticker       = parseArg('ticker')
+  const tier         = parseArg('tier') ?? 'demo'
+  const extractOnly  = parseArg('extract-only')
+
+  if (extractOnly && !VALID_EXTRACTORS.includes(extractOnly as ExtractorName)) {
+    console.error(`Invalid --extract-only=${extractOnly}. Must be one of: ${VALID_EXTRACTORS.join(', ')}`)
+    process.exit(1)
+  }
+  const opts: ProcessOptions = extractOnly
+    ? { extractOnly: extractOnly as ExtractorName }
+    : {}
 
   let tickers: string[] = []
 
   if (ticker) {
     tickers = [ticker.toUpperCase()]
-    console.log(`\nIngesting single ticker: ${tickers[0]}`)
+    console.log(`\nIngesting single ticker: ${tickers[0]}${extractOnly ? ` (extract-only: ${extractOnly})` : ''}`)
   } else {
     const universe = await getTierTickers(tier)
     tickers = universe.map(t => t.ticker)
-    console.log(`\nIngesting tier: ${tier} (${tickers.length} tickers)`)
+    console.log(`\nIngesting tier: ${tier} (${tickers.length} tickers)${extractOnly ? ` — extract-only: ${extractOnly}` : ''}`)
   }
 
   const start   = Date.now()
-  const results = await processBatch(tickers, 3)
+  const results = await processBatch(tickers, 3, opts)
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
   const succeeded = results.filter(r => r.success).length
