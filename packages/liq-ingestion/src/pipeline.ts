@@ -2,6 +2,8 @@
 // → store → run 3 extractors.
 
 import { writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { pgSql } from '@battu/db'
 import { getCIK, getFilingsList, fetchFilingDocument } from '@battu/edgar'
 import { parseDocument } from './doc-parser'
@@ -29,6 +31,11 @@ export interface PipelineResult {
 // what makes a re-run of a large tier (e.g. sp500 = 500 × 3 = 1,500 calls)
 // resume cheaply instead of re-extracting everything. Bypass with --force.
 const EXTRACTOR_CACHE_DAYS = 30
+
+// Cross-platform progress file. os.tmpdir() resolves to:
+//   Windows:        C:\Users\{user}\AppData\Local\Temp\battu_ingestion_progress.json
+//   Linux/Railway:  /tmp/battu_ingestion_progress.json
+const PROGRESS_FILE = join(tmpdir(), 'battu_ingestion_progress.json')
 
 async function isAlreadyExtracted(ticker: string): Promise<boolean> {
   const [fin, cap, gov] = await Promise.all([
@@ -219,49 +226,64 @@ export async function processBatch(
 ): Promise<PipelineResult[]> {
   const results: PipelineResult[] = []
   const queue = [...tickers]
-
   const startTime = Date.now()
 
-  while (queue.length > 0) {
-    const batch        = queue.splice(0, concurrency)
-    const batchResults = await Promise.all(batch.map(t => processTicker(t, opts)))
-    results.push(...batchResults)
+  console.log(`[pipeline] Progress file: ${PROGRESS_FILE}`)
 
-    if (results.length % 10 === 0 || results.length === tickers.length) {
-      const elapsed    = Date.now() - startTime
-      const perTicker  = elapsed / results.length
-      const remaining  = tickers.length - results.length
-      const etaMs      = remaining * perTicker
-      const etaMins    = Math.round(etaMs / 60000)
-      const pct        = ((results.length / tickers.length) * 100).toFixed(1)
-      const lastTicker = results[results.length - 1]?.ticker || ''
+  // Rolling worker pool — each worker pulls the next ticker from the shared
+  // queue the moment it finishes its current one. A slow Claude call only
+  // blocks the single worker waiting on it; the other workers keep draining
+  // the queue. This holds throughput at ~`concurrency` tickers in flight even
+  // when one stalls, unlike a Promise.all batch where the slowest ticker gates
+  // the whole batch.
+  async function worker(): Promise<void> {
+    while (queue.length > 0) {
+      const ticker = queue.shift()
+      if (!ticker) break
+      const result = await processTicker(ticker, opts)
+      results.push(result)
 
-      const progress = {
-        total:        tickers.length,
-        completed:    results.length,
-        succeeded:    results.filter(r => r.success).length,
-        failed:       results.filter(r => !r.success).length,
-        pct:          `${pct}%`,
-        eta_minutes:  etaMins,
-        elapsed_min:  Math.round(elapsed / 60000),
-        started:      new Date(startTime).toISOString(),
-        last_ticker:  lastTicker,
-        updated:      new Date().toISOString(),
+      // Progress reporting every 10 completed (and on the final ticker).
+      if (results.length % 10 === 0 || queue.length === 0) {
+        const elapsed   = Date.now() - startTime
+        const perTicker = elapsed / results.length
+        const remaining = queue.length
+        const etaMins   = Math.round((remaining * perTicker) / 60000)
+        const pct       = ((results.length / tickers.length) * 100).toFixed(1)
+        const last      = result.ticker
+
+        const progress = {
+          total:       tickers.length,
+          completed:   results.length,
+          remaining:   queue.length,
+          succeeded:   results.filter(r => r.success).length,
+          failed:      results.filter(r => !r.success).length,
+          skipped:     results.filter(r => r.skipped).length,
+          pct:         `${pct}%`,
+          eta_minutes: etaMins,
+          elapsed_min: Math.round(elapsed / 60000),
+          started:     new Date(startTime).toISOString(),
+          last_ticker: last,
+          updated:     new Date().toISOString(),
+        }
+
+        try {
+          writeFileSync(PROGRESS_FILE, JSON.stringify(progress, null, 2))
+        } catch {}
+
+        console.log(
+          `\n  ── ${results.length}/${tickers.length} (${pct}%) ` +
+          `· ETA: ${etaMins}min · Last: ${last} ` +
+          `· ✓${progress.succeeded} ✗${progress.failed} ↷${progress.skipped} ──\n`
+        )
       }
-
-      try {
-        writeFileSync('/tmp/battu_ingestion_progress.json',
-          JSON.stringify(progress, null, 2))
-      } catch {}
-
-      console.log(
-        `\n  ── Progress: ${results.length}/${tickers.length} (${pct}%) ` +
-        `· ETA: ${etaMins}min · Last: ${lastTicker} ──\n`
-      )
     }
-
-    if (queue.length > 0) await new Promise(r => setTimeout(r, 500))
   }
+
+  // Launch N workers — they all pull from the same queue.
+  await Promise.all(
+    Array.from({ length: concurrency }, () => worker())
+  )
 
   return results
 }
