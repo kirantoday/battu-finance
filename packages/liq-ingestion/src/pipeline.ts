@@ -1,6 +1,8 @@
 // Per-ticker ingestion: resolve CIK → download filings → parse → chunk → embed
 // → store → run 3 extractors.
 
+import { writeFileSync } from 'fs'
+import { pgSql } from '@battu/db'
 import { getCIK, getFilingsList, fetchFilingDocument } from '@battu/edgar'
 import { parseDocument } from './doc-parser'
 import { chunkSections } from './chunker'
@@ -15,10 +17,35 @@ import { extractAndStoreCapital }    from './extractors/capital'
 import { extractAndStoreGovernance } from './extractors/governance'
 
 export interface PipelineResult {
-  ticker:  string
-  success: boolean
-  error?:  string
-  chunks:  number
+  ticker:   string
+  success:  boolean
+  error?:   string
+  chunks:   number
+  skipped?: boolean
+}
+
+// A ticker whose three extractor tables were all written within this window is
+// considered fresh — we skip re-running the Claude extractors for it. This is
+// what makes a re-run of a large tier (e.g. sp500 = 500 × 3 = 1,500 calls)
+// resume cheaply instead of re-extracting everything. Bypass with --force.
+const EXTRACTOR_CACHE_DAYS = 30
+
+async function isAlreadyExtracted(ticker: string): Promise<boolean> {
+  const [fin, cap, gov] = await Promise.all([
+    pgSql`SELECT extracted_at FROM battu.company_financials
+          WHERE ticker = ${ticker}
+            AND extracted_at > NOW() - make_interval(days => ${EXTRACTOR_CACHE_DAYS})
+          LIMIT 1`,
+    pgSql`SELECT extracted_at FROM battu.company_capital
+          WHERE ticker = ${ticker}
+            AND extracted_at > NOW() - make_interval(days => ${EXTRACTOR_CACHE_DAYS})
+          LIMIT 1`,
+    pgSql`SELECT extracted_at FROM battu.company_governance
+          WHERE ticker = ${ticker}
+            AND extracted_at > NOW() - make_interval(days => ${EXTRACTOR_CACHE_DAYS})
+          LIMIT 1`,
+  ])
+  return fin.length > 0 && cap.length > 0 && gov.length > 0
 }
 
 const FILING_TYPE_QUERIES: Array<{ label: string; forms: string[] }> = [
@@ -44,6 +71,11 @@ export interface ProcessOptions {
    * round-trips again.
    */
   extractOnly?: ExtractorName
+  /**
+   * Bypass the isAlreadyExtracted() resume check and re-extract every ticker
+   * even if its three tables already hold fresh data (--force on the CLI).
+   */
+  force?: boolean
 }
 
 export async function processTicker(
@@ -58,6 +90,15 @@ export async function processTicker(
       return { ticker, success: false, error: 'CIK not found', chunks: 0 }
     }
     console.log(`  CIK: ${cik}`)
+
+    // Resume check: if all three extractor tables already hold fresh data,
+    // skip the whole ticker — no SEC round-trips and, crucially, no Claude
+    // extractor calls. --force (opts.force) and --extract-only both bypass
+    // this: extract-only is itself an explicit re-extraction request.
+    if (!opts.force && !opts.extractOnly && await isAlreadyExtracted(ticker)) {
+      console.log(`  [skip] ${ticker} — all tables extracted within ${EXTRACTOR_CACHE_DAYS} days`)
+      return { ticker, success: true, chunks: 0, skipped: true }
+    }
 
     // Fast path: extractor-only re-run. Skip all download/chunk/embed work
     // and just re-execute the named extractor against existing chunks.
@@ -179,10 +220,46 @@ export async function processBatch(
   const results: PipelineResult[] = []
   const queue = [...tickers]
 
+  const startTime = Date.now()
+
   while (queue.length > 0) {
     const batch        = queue.splice(0, concurrency)
     const batchResults = await Promise.all(batch.map(t => processTicker(t, opts)))
     results.push(...batchResults)
+
+    if (results.length % 10 === 0 || results.length === tickers.length) {
+      const elapsed    = Date.now() - startTime
+      const perTicker  = elapsed / results.length
+      const remaining  = tickers.length - results.length
+      const etaMs      = remaining * perTicker
+      const etaMins    = Math.round(etaMs / 60000)
+      const pct        = ((results.length / tickers.length) * 100).toFixed(1)
+      const lastTicker = results[results.length - 1]?.ticker || ''
+
+      const progress = {
+        total:        tickers.length,
+        completed:    results.length,
+        succeeded:    results.filter(r => r.success).length,
+        failed:       results.filter(r => !r.success).length,
+        pct:          `${pct}%`,
+        eta_minutes:  etaMins,
+        elapsed_min:  Math.round(elapsed / 60000),
+        started:      new Date(startTime).toISOString(),
+        last_ticker:  lastTicker,
+        updated:      new Date().toISOString(),
+      }
+
+      try {
+        writeFileSync('/tmp/battu_ingestion_progress.json',
+          JSON.stringify(progress, null, 2))
+      } catch {}
+
+      console.log(
+        `\n  ── Progress: ${results.length}/${tickers.length} (${pct}%) ` +
+        `· ETA: ${etaMins}min · Last: ${lastTicker} ──\n`
+      )
+    }
+
     if (queue.length > 0) await new Promise(r => setTimeout(r, 500))
   }
 

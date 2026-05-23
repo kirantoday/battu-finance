@@ -16,6 +16,34 @@ function anthropicClient(): Anthropic {
   return _client
 }
 
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = 3
+): Promise<T | null> {
+  const delays = [30000, 60000, 120000]  // 30s, 60s, 120s
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status
+      if (status === 400 || status === 401 || status === 403) {
+        console.error(`  [retry] ${label} — fatal error ${status}, not retrying`)
+        return null
+      }
+      if (attempt < maxRetries) {
+        const wait = delays[attempt]
+        console.log(`  [retry] ${label} — attempt ${attempt + 1}/${maxRetries}, waiting ${wait/1000}s (status: ${status || err?.message})`)
+        await new Promise(r => setTimeout(r, wait))
+      } else {
+        console.error(`  [retry] ${label} — all ${maxRetries} retries exhausted`)
+        return null
+      }
+    }
+  }
+  return null
+}
+
 interface CreditFacilityResult {
   hasCreditFacility: boolean
   facilityType:      string | null
@@ -29,13 +57,17 @@ interface CreditFacilityResult {
   facilityCovenants: string | null
 }
 
-async function claudeHaikuJson<T>(prompt: string): Promise<T | null> {
-  try {
-    const res = await anthropicClient().messages.create({
+async function claudeHaikuJson<T>(prompt: string, label: string): Promise<T | null> {
+  const res = await withRetry(
+    () => anthropicClient().messages.create({
       model:      'claude-haiku-4-5',
       max_tokens: 500,
       messages:   [{ role: 'user', content: prompt }],
-    })
+    }),
+    label,
+  )
+  if (!res) return null
+  try {
     const text  = res.content[0]?.type === 'text' ? res.content[0].text : ''
     const clean = text.replace(/```json|```/g, '').trim()
     const match = clean.match(/\{[\s\S]*\}/)
@@ -162,6 +194,7 @@ If no credit facility found, set hasCreditFacility: false and others null.
 
 Excerpts:
 ${context}`,
+    `${ticker} credit facility lender extraction`,
   )
 }
 
@@ -207,6 +240,7 @@ NOTES:
 
 Excerpts:
 ${context}`,
+    `${ticker} credit facility terms extraction`,
   )
 }
 

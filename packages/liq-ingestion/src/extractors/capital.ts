@@ -20,22 +20,32 @@ function anthropicClient(): Anthropic {
   return _client
 }
 
-/** Retry on transient Anthropic errors (529 overloaded, 5xx, network). */
-async function anthropicWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
-  let attempt = 0
-  while (true) {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = 3
+): Promise<T | null> {
+  const delays = [30000, 60000, 120000]  // 30s, 60s, 120s
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn()
-    } catch (e) {
-      const msg = String((e as Error)?.message ?? e)
-      const isTransient = /529|overloaded|503|504|ECONNRESET|ETIMEDOUT/i.test(msg)
-      if (!isTransient || attempt >= maxRetries) throw e
-      const waitMs = 5_000 * Math.pow(2, attempt)   // 5s, 10s, 20s
-      console.warn(`  [capital] Anthropic transient error — retry ${attempt + 1}/${maxRetries} after ${waitMs / 1000}s: ${msg.slice(0, 80)}`)
-      await new Promise(r => setTimeout(r, waitMs))
-      attempt++
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status
+      if (status === 400 || status === 401 || status === 403) {
+        console.error(`  [retry] ${label} — fatal error ${status}, not retrying`)
+        return null
+      }
+      if (attempt < maxRetries) {
+        const wait = delays[attempt]
+        console.log(`  [retry] ${label} — attempt ${attempt + 1}/${maxRetries}, waiting ${wait/1000}s (status: ${status || err?.message})`)
+        await new Promise(r => setTimeout(r, wait))
+      } else {
+        console.error(`  [retry] ${label} — all ${maxRetries} retries exhausted`)
+        return null
+      }
     }
   }
+  return null
 }
 
 export async function extractAndStoreCapital(
@@ -80,11 +90,11 @@ export async function extractAndStoreCapital(
       )
       if (chunks.length > 0) {
         const context = chunks.map(c => c.chunkText).join('\n\n').slice(0, 6000)
-        // Wrap the whole Claude block so a 529 (or other API failure) leaves
-        // the EDGAR-derived fields (has_shelf, is_wksi, dates, source URL)
-        // intact and the row still gets inserted.
-        try {
-          const res = await anthropicWithRetry(() => anthropicClient().messages.create({
+        // withRetry returns null on API failure (after backoff) rather than
+        // throwing, so the EDGAR-derived fields (has_shelf, is_wksi, dates,
+        // source URL) stay intact and the row still gets inserted.
+        const res = await withRetry(
+          () => anthropicClient().messages.create({
             model:      'claude-haiku-4-5',
             max_tokens: 400,
             messages: [{
@@ -94,7 +104,10 @@ Return ONLY JSON:
 {"totalAmountDollars":number|null,"isATM":boolean,"atmAgent":string|null,"securitiesType":string|null,"expiryDate":"YYYY-MM-DD"|null}
 Text: ${context}`,
             }],
-          }))
+          }),
+          `${ticker} shelf registration extraction`,
+        )
+        if (res) {
           try {
             const t = res.content[0]?.type === 'text' ? res.content[0].text : ''
             const clean = t.replace(/```json|```/g, '').trim()
@@ -114,8 +127,8 @@ Text: ${context}`,
           } catch {
             // JSON parse failure — leave shelf-detail nulls
           }
-        } catch (e) {
-          console.warn(`  [capital] Shelf-amount Claude call failed for ${ticker} (${(e as Error).message.slice(0, 60)}…) — storing EDGAR metadata only`)
+        } else {
+          console.warn(`  [capital] Shelf-amount Claude call failed for ${ticker} — storing EDGAR metadata only`)
         }
       }
     }

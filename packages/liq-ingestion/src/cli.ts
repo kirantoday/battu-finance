@@ -2,6 +2,7 @@
 // Usage:
 //   pnpm ingest:liq --ticker=BIIB
 //   pnpm ingest:liq --tier=demo
+//   pnpm ingest:liq --tier=demo --force   (re-extract even if already fresh)
 
 // IMPORTANT: load env BEFORE any module that touches process.env at import time
 // (db client, Anthropic, postgres connection). Side-effect import.
@@ -22,24 +23,28 @@ async function main() {
   const ticker       = parseArg('ticker')
   const tier         = parseArg('tier') ?? 'demo'
   const extractOnly  = parseArg('extract-only')
+  const force        = process.argv.includes('--force')
 
   if (extractOnly && !VALID_EXTRACTORS.includes(extractOnly as ExtractorName)) {
     console.error(`Invalid --extract-only=${extractOnly}. Must be one of: ${VALID_EXTRACTORS.join(', ')}`)
     process.exit(1)
   }
-  const opts: ProcessOptions = extractOnly
-    ? { extractOnly: extractOnly as ExtractorName }
-    : {}
+  const opts: ProcessOptions = {
+    ...(extractOnly ? { extractOnly: extractOnly as ExtractorName } : {}),
+    force,
+  }
 
   let tickers: string[] = []
 
+  const forceNote = force ? ' [--force: re-extract all]' : ''
+
   if (ticker) {
     tickers = [ticker.toUpperCase()]
-    console.log(`\nIngesting single ticker: ${tickers[0]}${extractOnly ? ` (extract-only: ${extractOnly})` : ''}`)
+    console.log(`\nIngesting single ticker: ${tickers[0]}${extractOnly ? ` (extract-only: ${extractOnly})` : ''}${forceNote}`)
   } else {
     const universe = await getTierTickers(tier)
     tickers = universe.map(t => t.ticker)
-    console.log(`\nIngesting tier: ${tier} (${tickers.length} tickers)${extractOnly ? ` — extract-only: ${extractOnly}` : ''}`)
+    console.log(`\nIngesting tier: ${tier} (${tickers.length} tickers)${extractOnly ? ` — extract-only: ${extractOnly}` : ''}${forceNote}`)
   }
 
   const start   = Date.now()
@@ -47,6 +52,7 @@ async function main() {
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
   const succeeded = results.filter(r => r.success).length
+  const skipped   = results.filter(r => r.skipped).length
   const failed    = results.filter(r => !r.success).length
   const chunks    = results.reduce((sum, r) => sum + r.chunks, 0)
 
@@ -54,6 +60,7 @@ async function main() {
   console.log(`  INGESTION COMPLETE`)
   console.log(`  Time:    ${elapsed}s`)
   console.log(`  Success: ${succeeded}/${tickers.length}`)
+  console.log(`  Skipped: ${skipped} (already fresh, within cache window)`)
   console.log(`  Failed:  ${failed}`)
   console.log(`  Chunks:  ${chunks} total`)
   if (failed > 0) {
