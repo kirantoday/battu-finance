@@ -604,15 +604,11 @@ No light mode.
 
 #### LABEL VISIBILITY RULE
 
-Row labels and field labels must use `var(--battu-text)` at full opacity, or
-a lightened version of the accent. Never use `var(--battu-label-color)` for
-primary row labels — it is reserved for secondary/helper text only.
-
-- **Primary labels** (stat names, statement-row names): `var(--battu-text)`
-- **Margin / helper rows** (Gross Margin, Operating Margin, Net Margin lines):
-  `var(--battu-muted)` + `fontStyle: 'italic'`
-- **Section headers** (INCOME STATEMENT, BALANCE SHEET, etc.):
-  `var(--battu-accent)` + `borderLeft: '3px solid var(--battu-accent)'`
+- Row labels and field labels: `var(--battu-muted)` — they recede
+- Data values (prices, amounts, ratios): `var(--battu-value-color)` — they stand out
+- Key/headline values (price, total liquidity): `var(--battu-accent)` or color-coded
+- Section headers: `var(--battu-accent)`, 9px, letter-spacing 3px, font-weight 600
+- Never use the same color for both label and value on the same row
 
 ---
 
