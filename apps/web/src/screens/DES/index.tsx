@@ -29,7 +29,7 @@ export function DESScreen() {
     setError(null)
     setProfile(null)
 
-    fetch(`/api/v1/fundamentals/profile/${ticker}`)
+    fetch(`/api/v1/fundamentals/profile/${encodeURIComponent(ticker)}`)
       .then(async (r) => {
         const body = await r.json().catch(() => ({ error: 'Bad JSON from API' }))
         if (aborted) return

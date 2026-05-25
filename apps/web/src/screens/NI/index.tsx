@@ -40,7 +40,7 @@ export function NIScreen() {
 
     const primaryUrl = isHeadlines
       ? '/api/v1/news/headlines/top?limit=30'
-      : `/api/v1/news/${ticker}?limit=30`
+      : `/api/v1/news/${encodeURIComponent(ticker)}?limit=30`
 
     try {
       const res = await fetch(primaryUrl)

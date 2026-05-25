@@ -10,7 +10,7 @@ export const liqRoutes = new Hono()
  * Sub-50ms target — no Claude/EDGAR calls at query time.
  */
 liqRoutes.get('/:ticker', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
 
   try {
     const [fins, caps, govs] = await Promise.all([
@@ -119,7 +119,7 @@ liqRoutes.get('/:ticker', async (c) => {
  * POST /api/v1/liq/:ticker/refresh — refresh now goes through the CLI ingestion job.
  */
 liqRoutes.post('/:ticker/refresh', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
   return c.json({
     data:    null,
     error:   null,

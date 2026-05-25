@@ -10,7 +10,7 @@ export const legalRoutes = new Hono()
  * Sub-50ms target — no Claude/EDGAR calls at query time.
  */
 legalRoutes.get('/:ticker', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
 
   try {
     const rows = await pgSql`

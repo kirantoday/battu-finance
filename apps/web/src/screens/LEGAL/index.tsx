@@ -24,7 +24,7 @@ export function LEGALScreen() {
     setError(null)
     setData(null)
 
-    fetch(`/api/v1/legal/${ticker}`)
+    fetch(`/api/v1/legal/${encodeURIComponent(ticker)}`)
       .then(async (r) => {
         const body = await r.json().catch(() => ({ error: 'Bad JSON from API' }))
         if (!r.ok || body?.error || !body?.data) {

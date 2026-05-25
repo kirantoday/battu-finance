@@ -28,7 +28,7 @@ function fmtDate(d: string | null): string {
 }
 
 export function DESStats({ profile }: Props) {
-  const rows: Array<[{ label: string; value: string }, { label: string; value: string }]> = [
+  const rows: Array<Array<{ label: string; value: string }>> = [
     [
       { label: 'MARKET CAP',      value: fmtB(profile.marketCapB) },
       { label: 'P/E RATIO (TTM)', value: profile.peRatioTTM != null ? `${fmt(profile.peRatioTTM)}x` : '—' },
@@ -46,12 +46,15 @@ export function DESStats({ profile }: Props) {
       { label: 'BETA',            value: fmt(profile.beta) },
     ],
     [
-      { label: 'AVG VOLUME',      value: profile.avgVolume > 0 ? formatVolume(profile.avgVolume) : '—' },
-      { label: 'NEXT EARNINGS',   value: fmtDate(profile.nextEarningsDate) },
+      { label: 'AVG VOLUME (90D)', value: profile.avgVolume > 0 ? formatVolume(profile.avgVolume) : '—' },
+      { label: 'NEXT EARNINGS',    value: fmtDate(profile.nextEarningsDate) },
     ],
     [
-      { label: 'EV/EBITDA',       value: profile.evEbitda != null ? `${fmt(profile.evEbitda)}x` : '—' },
-      { label: 'P/B RATIO',       value: profile.pbRatio  != null ? `${fmt(profile.pbRatio)}x`  : '—' },
+      { label: 'AVG VOLUME (20D)', value: profile.avgVol20d ? formatVolume(profile.avgVol20d) : '—' },
+      { label: 'EV/EBITDA',        value: profile.evEbitda != null ? `${fmt(profile.evEbitda)}x` : '—' },
+    ],
+    [
+      { label: 'P/B RATIO',        value: profile.pbRatio  != null ? `${fmt(profile.pbRatio)}x`  : '—' },
     ],
   ]
 

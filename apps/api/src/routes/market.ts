@@ -29,7 +29,7 @@ marketRoutes.get('/quotes', async (c) => {
 
 // GET /api/v1/market/bars/:ticker?timeframe=3M — OHLCV for GP chart
 marketRoutes.get('/bars/:ticker', async (c) => {
-  const ticker    = c.req.param('ticker').toUpperCase()
+  const ticker    = decodeURIComponent(c.req.param('ticker')).toUpperCase()
   const timeframe = (c.req.query('timeframe') || '3M').toUpperCase()
   const tf        = TIMEFRAME_MAP[timeframe] || TIMEFRAME_MAP['3M']
   const bars = await marketProvider.getBars(ticker, tf)
@@ -48,7 +48,7 @@ marketRoutes.get('/movers/:direction', async (c) => {
 
 // GET /api/v1/market/price/:ticker — single quote (DES, QR, WL)
 marketRoutes.get('/price/:ticker', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
   const quote = await marketProvider.getQuote(ticker)
   if (!quote) {
     return c.json({ data: null, error: `No quote found for ${ticker}`, provider: marketProvider.providerName }, 404)
@@ -58,7 +58,7 @@ marketRoutes.get('/price/:ticker', async (c) => {
 
 // Legacy stub kept for back-compat with the validation suite — same data as bars
 marketRoutes.get('/ohlcv/:ticker', async (c) => {
-  const ticker    = c.req.param('ticker').toUpperCase()
+  const ticker    = decodeURIComponent(c.req.param('ticker')).toUpperCase()
   const timeframe = (c.req.query('timeframe') || '3M').toUpperCase()
   const tf        = TIMEFRAME_MAP[timeframe] || TIMEFRAME_MAP['3M']
   const bars = await marketProvider.getBars(ticker, tf)

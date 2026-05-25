@@ -81,7 +81,7 @@ userRoutes.post('/watchlist/:id/tickers', async (c) => {
 // DELETE /api/v1/user/watchlist/:id/tickers/:ticker
 userRoutes.delete('/watchlist/:id/tickers/:ticker', async (c) => {
   const id     = c.req.param('id')
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
 
   try {
     const [list] = await db

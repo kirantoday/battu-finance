@@ -6,6 +6,37 @@ import type {
 import type { DESProfile, FAData, FAStatement } from '@battu/shared'
 import { NOT_IMPLEMENTED } from './_notImplemented'
 
+const FMP_STABLE_BASE = 'https://financialmodelingprep.com/stable'
+
+/**
+ * FMP/Yahoo use a hyphen for class-share tickers (BRK-B), not the dot users
+ * type (BRK.B). Normalize before hitting the FMP REST endpoints directly.
+ */
+function toFmpSymbol(ticker: string): string {
+  return ticker.toUpperCase().replace(/\./g, '-')
+}
+
+/**
+ * 20-day average daily volume from FMP's light EOD history. FMP's profile
+ * `averageVolume` is a ~90-day figure; this complements it with a short-term
+ * view. Returns null on any failure so the DES screen degrades to "—".
+ */
+async function fetch20dAvgVolume(ticker: string): Promise<number | null> {
+  const apiKey = process.env.FMP_API_KEY || 'demo'
+  const url =
+    `${FMP_STABLE_BASE}/historical-price-eod/light` +
+    `?symbol=${toFmpSymbol(ticker)}&limit=20&apikey=${apiKey}`
+  const res = await fetch(url)
+  if (!res.ok) return null
+  const json = (await res.json()) as unknown
+  // FMP returns its no-auth/no-plan errors as a 200 with a {"Error Message"}
+  // object rather than an array — guard against that.
+  if (!Array.isArray(json) || json.length === 0) return null
+  const recent = json.slice(0, 20) as Array<{ volume?: number }>
+  const sum = recent.reduce((acc, d) => acc + (d.volume || 0), 0)
+  return Math.round(sum / recent.length)
+}
+
 /**
  * From an array of analyst-estimate entries, pick the earliest date that is
  * strictly in the future AND within the next 12 months. Returns null when no
@@ -104,9 +135,11 @@ export const fundamentalsRoutes = new Hono()
 // Promise.allSettled lets us degrade gracefully when a single endpoint 401s
 // (common on the FMP demo key beyond AAPL).
 fundamentalsRoutes.get('/profile/:ticker', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  // decodeURIComponent is defensive — the frontend encodes the ticker so any
+  // future special characters survive the URL path intact.
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
 
-  const [profileRes, ratiosRes, metricsRes, earningsRes, quoteRes] = await Promise.allSettled([
+  const [profileRes, ratiosRes, metricsRes, earningsRes, quoteRes, avgVol20dRes] = await Promise.allSettled([
     fmpClient.getProfile(ticker),
     fmpClient.getRatiosTTM(ticker),
     fmpClient.getKeyMetricsTTM(ticker),
@@ -117,6 +150,7 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
     // 4–12 months and is a reasonable proxy for the next earnings call.
     fmpClient.getAnalystEstimates(ticker, { period: 'annual', limit: 10 }),
     marketProvider.getQuote(ticker),
+    fetch20dAvgVolume(ticker),
   ])
 
   // Log each rejected source on its own line so the operator can see exactly
@@ -127,6 +161,7 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
     ['fmp.key-metrics-ttm',metricsRes],
     ['fmp.estimates',      earningsRes],
     ['market.quote',       quoteRes],
+    ['fmp.eod-light-20d',  avgVol20dRes],
   ]
   for (const [name, res] of sources) {
     if (res.status === 'rejected') {
@@ -139,6 +174,7 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
   const metrics  = metricsRes.status  === 'fulfilled' ? metricsRes.value  : null
   const earnings = earningsRes.status === 'fulfilled' ? earningsRes.value : null
   const quote    = quoteRes.status    === 'fulfilled' ? quoteRes.value    : null
+  const avgVol20d = avgVol20dRes.status === 'fulfilled' ? avgVol20dRes.value : null
 
   // If neither FMP nor the market provider answered, treat as not found.
   if (!profile && !quote) {
@@ -208,6 +244,7 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
     changePct:     quote?.changePct ?? profile?.changePercentage ?? 0,
     volume:        quote?.volume    ?? 0,
     avgVolume,
+    avgVol20d,
     week52High:    quote?.week52High || profile52High,
     week52Low:     quote?.week52Low  || profile52Low,
     open:          quote?.open      ?? 0,
@@ -255,7 +292,7 @@ fundamentalsRoutes.get('/profile/:ticker', async (c) => {
 // GET /api/v1/fundamentals/financials/:ticker?period=annual|quarter&limit=5
 // Returns combined IS + BS + CF over the last N periods (default 5).
 fundamentalsRoutes.get('/financials/:ticker', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
   const rawPeriod = c.req.query('period') === 'quarter' ? 'quarter' : 'annual'
   const limit = Math.max(1, Math.min(20, parseInt(c.req.query('limit') || '5')))
 

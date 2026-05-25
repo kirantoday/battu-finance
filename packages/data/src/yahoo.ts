@@ -72,7 +72,11 @@ export class YahooFinanceClient implements MarketProvider {
 
   /** Fetch raw chart payload for a ticker/range/interval combo. */
   private async fetchChart(ticker: string, range: string, interval: string): Promise<YahooChartResult | null> {
-    const url = `${BASE}/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}`
+    // Yahoo uses a hyphen for class-share tickers (BRK-B), not the dot users
+    // type (BRK.B) — without this it 404s. encodeURIComponent leaves dots and
+    // hyphens untouched, so normalize the symbol ourselves first.
+    const symbol = ticker.toUpperCase().replace(/\./g, '-')
+    const url = `${BASE}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
     try {
       const res = await fetch(url, { headers: HEADERS })
       if (!res.ok) {

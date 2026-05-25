@@ -43,8 +43,8 @@ export function GPScreen() {
     setHoveredBar(null)
 
     Promise.all([
-      fetch(`/api/v1/market/bars/${ticker}?timeframe=${timeframe}`).then(r => r.json()),
-      fetch(`/api/v1/market/price/${ticker}`).then(r => r.json()),
+      fetch(`/api/v1/market/bars/${encodeURIComponent(ticker)}?timeframe=${timeframe}`).then(r => r.json()),
+      fetch(`/api/v1/market/price/${encodeURIComponent(ticker)}`).then(r => r.json()),
     ])
       .then(([barsRes, quoteRes]) => {
         if (aborted) return

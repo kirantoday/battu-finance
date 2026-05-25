@@ -56,7 +56,8 @@ export function LIQScreen() {
     setData(null)
     startStepProgress()
 
-    const url    = force ? `/api/v1/liq/${ticker}/refresh` : `/api/v1/liq/${ticker}`
+    const enc    = encodeURIComponent(ticker)
+    const url    = force ? `/api/v1/liq/${enc}/refresh` : `/api/v1/liq/${enc}`
     const opts   = force ? { method: 'POST' } : undefined
 
     fetch(url, opts)

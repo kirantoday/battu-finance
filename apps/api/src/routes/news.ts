@@ -75,7 +75,7 @@ newsRoutes.get('/search', async (c) => {
 
 // GET /api/v1/news/:ticker — ticker-specific news (NI / CN commands)
 newsRoutes.get('/:ticker', async (c) => {
-  const ticker = c.req.param('ticker').toUpperCase()
+  const ticker = decodeURIComponent(c.req.param('ticker')).toUpperCase()
   // Defense against the wildcard path catching reserved subpaths
   if (ticker === 'HEADLINES' || ticker === 'SEARCH') {
     return c.json({ data: null, error: 'Use /headlines/top or /search', count: 0 }, 400)

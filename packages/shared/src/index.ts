@@ -283,7 +283,8 @@ export interface DESProfile {
   change:           number
   changePct:        number
   volume:           number
-  avgVolume:        number
+  avgVolume:        number    // FMP profile averageVolume (~90-day)
+  avgVol20d:        number | null  // 20-day average daily volume
   week52High:       number
   week52Low:        number
   open:             number

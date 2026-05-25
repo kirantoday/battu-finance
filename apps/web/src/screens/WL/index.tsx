@@ -134,7 +134,7 @@ export function WLScreen() {
   const removeTicker = async (ticker: string) => {
     if (!watchlist) return
     try {
-      const res  = await fetch(`/api/v1/user/watchlist/${watchlist.id}/tickers/${ticker}`, {
+      const res  = await fetch(`/api/v1/user/watchlist/${watchlist.id}/tickers/${encodeURIComponent(ticker)}`, {
         method: 'DELETE',
       })
       const json = await res.json()

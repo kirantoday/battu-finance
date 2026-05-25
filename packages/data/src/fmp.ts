@@ -429,6 +429,14 @@ export interface FMPKeyMetricsTTM {
 export class FMPClient {
   constructor(private apiKey: string, private baseUrl: string) {}
 
+  /**
+   * Normalize class-share tickers for FMP: dot → hyphen (BRK.B → BRK-B).
+   * Users type "BRK.B" but FMP only recognizes "BRK-B" (returns [] otherwise).
+   */
+  private sym(ticker: string): string {
+    return ticker.toUpperCase().replace(/\./g, '-')
+  }
+
   private async get<T>(path: string, params: Record<string, string | number | boolean> = {}): Promise<T> {
     const url = new URL(this.baseUrl + path)
     url.searchParams.set('apikey', this.apiKey)
@@ -450,7 +458,7 @@ export class FMPClient {
   }
 
   async getProfile(ticker: string): Promise<FMPProfile> {
-    const res = await this.get<FMPProfile[]>(`/profile`, { symbol: ticker.toUpperCase() })
+    const res = await this.get<FMPProfile[]>(`/profile`, { symbol: this.sym(ticker) })
     return res?.[0]
   }
 
@@ -460,7 +468,7 @@ export class FMPClient {
     limit = 10
   ): Promise<FMPIncomeStatement[]> {
     return this.get<FMPIncomeStatement[]>(
-      `/income-statement`, { symbol: ticker.toUpperCase(), period, limit }
+      `/income-statement`, { symbol: this.sym(ticker), period, limit }
     )
   }
 
@@ -470,7 +478,7 @@ export class FMPClient {
     limit = 10
   ): Promise<FMPBalanceSheet[]> {
     return this.get<FMPBalanceSheet[]>(
-      `/balance-sheet-statement`, { symbol: ticker.toUpperCase(), period, limit }
+      `/balance-sheet-statement`, { symbol: this.sym(ticker), period, limit }
     )
   }
 
@@ -480,28 +488,28 @@ export class FMPClient {
     limit = 10
   ): Promise<FMPCashFlow[]> {
     return this.get<FMPCashFlow[]>(
-      `/cash-flow-statement`, { symbol: ticker.toUpperCase(), period, limit }
+      `/cash-flow-statement`, { symbol: this.sym(ticker), period, limit }
     )
   }
 
   async getRatios(ticker: string): Promise<FMPRatios> {
-    const res = await this.get<FMPRatios[]>(`/ratios`, { symbol: ticker.toUpperCase() })
+    const res = await this.get<FMPRatios[]>(`/ratios`, { symbol: this.sym(ticker) })
     return res?.[0]
   }
 
   async getRatiosTTM(ticker: string): Promise<FMPRatiosTTM | null> {
-    const res = await this.get<FMPRatiosTTM[]>(`/ratios-ttm`, { symbol: ticker.toUpperCase() })
+    const res = await this.get<FMPRatiosTTM[]>(`/ratios-ttm`, { symbol: this.sym(ticker) })
     return res?.[0] ?? null
   }
 
   async getKeyMetricsTTM(ticker: string): Promise<FMPKeyMetricsTTM | null> {
-    const res = await this.get<FMPKeyMetricsTTM[]>(`/key-metrics-ttm`, { symbol: ticker.toUpperCase() })
+    const res = await this.get<FMPKeyMetricsTTM[]>(`/key-metrics-ttm`, { symbol: this.sym(ticker) })
     return res?.[0] ?? null
   }
 
   async getPeers(ticker: string): Promise<string[]> {
     const res = await this.get<{ symbol: string; peersList?: string[] }[]>(
-      `/stock-peers`, { symbol: ticker.toUpperCase() }
+      `/stock-peers`, { symbol: this.sym(ticker) }
     )
     return res?.[0]?.peersList ?? []
   }
@@ -513,7 +521,7 @@ export class FMPClient {
     // Stable requires `period`. Returns the full array so callers can pick a
     // specific entry (e.g. the nearest future fiscal year-end).
     const res = await this.get<FMPEstimates[]>(`/analyst-estimates`, {
-      symbol: ticker.toUpperCase(),
+      symbol: this.sym(ticker),
       period: opts?.period ?? 'annual',
       limit:  opts?.limit  ?? 1,
     })
@@ -522,12 +530,12 @@ export class FMPClient {
 
   async getGrades(ticker: string): Promise<FMPGrade[]> {
     // The stable API renamed /grade/{ticker} → /analyst-recommendation?symbol=
-    return this.get<FMPGrade[]>(`/analyst-recommendation`, { symbol: ticker.toUpperCase() })
+    return this.get<FMPGrade[]>(`/analyst-recommendation`, { symbol: this.sym(ticker) })
   }
 
   async getPriceTargetConsensus(ticker: string): Promise<FMPPriceTarget> {
     const res = await this.get<FMPPriceTarget[]>(
-      `/price-target-consensus`, { symbol: ticker.toUpperCase() }
+      `/price-target-consensus`, { symbol: this.sym(ticker) }
     )
     return res?.[0]
   }
@@ -545,6 +553,6 @@ export class FMPClient {
   }
 
   async getDividends(ticker: string): Promise<FMPDividend[]> {
-    return this.get<FMPDividend[]>(`/dividends`, { symbol: ticker.toUpperCase() })
+    return this.get<FMPDividend[]>(`/dividends`, { symbol: this.sym(ticker) })
   }
 }
