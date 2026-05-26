@@ -1,6 +1,7 @@
 {
   "name": "battu-finance",
   "private": true,
+  "packageManager": "pnpm@11.2.2",
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
     "dev:api": "pnpm --filter @battu/api dev",
