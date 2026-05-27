@@ -11,10 +11,13 @@
 nixPkgs = ["nodejs_22", "pnpm"]
 
 [phases.install]
-cmds = ["pnpm install --frozen-lockfile"]
+cmds = ["COREPACK_ENABLE=0 pnpm install --frozen-lockfile"]
 
 [phases.build]
-cmds = []
+cmds = ["pnpm --filter @battu/api build"]
+
+[phases.start]
+cmds = ["pnpm --filter @battu/api start"]
 
 [docker]
 ports = [3000]
